@@ -2,6 +2,10 @@
 local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 
 local LDB = LibStub('LibDataBroker-1.1')
+local QTip = LibStub('LibQTip-2.0')
+
+-- Tooltip key for LibQTip-2.0
+local TOOLTIP_KEY = 'LibsSocialTooltip'
 
 -- Color constants
 local COLORS = {
@@ -12,12 +16,19 @@ local COLORS = {
 	separator = 'FFD200',
 	offline = '808080',
 	online = '40FF40',
+	sameZone = '00FF00',
 }
 
--- Mobile icons
-local MOBILE_HERE_ICON = '|TInterface\\ChatFrame\\UI-ChatIcon-ArmoryChat:0:0:0:0:16:16:0:16:0:16:73:177:73|t'
-local MOBILE_BUSY_ICON = '|TInterface\\ChatFrame\\UI-ChatIcon-ArmoryChat-BusyMobile:0:0:0:0:16:16:0:16:0:16|t'
-local MOBILE_AWAY_ICON = '|TInterface\\ChatFrame\\UI-ChatIcon-ArmoryChat-AwayMobile:0:0:0:0:16:16:0:16:0:16|t'
+-- Section header color tables
+local SECTION_COLORS = {
+	bnet = { r = 0, g = 0.64, b = 0.91 },
+	friends = { r = 1, g = 1, b = 1 },
+	guild = { r = 0, g = 1, b = 0 },
+}
+
+-- Status icon textures
+local STATUS_ICON_AFK = '|TInterface\\FriendsFrame\\StatusIcon-Away:0|t'
+local STATUS_ICON_DND = '|TInterface\\FriendsFrame\\StatusIcon-DnD:0|t'
 
 -- Create the LibDataBroker object
 local socialLDB
@@ -46,7 +57,11 @@ function LibsSocial:InitializeDataBroker()
 			end
 		end,
 		OnTooltipShow = function(tooltip)
-			LibsSocial:BuildTooltip(tooltip)
+			-- Hijack: hide the GameTooltip and show our custom tooltip instead
+			local owner = tooltip:GetOwner()
+			tooltip:Hide()
+			local anchor = owner or tooltip
+			LibsSocial:ShowCustomTooltip(anchor)
 		end,
 	})
 
@@ -59,7 +74,6 @@ function LibsSocial:UpdateDisplay()
 		return
 	end
 
-	local db = self.db.profile.display
 	local Friends = self.Friends
 
 	local text = self:GetDisplayText()
@@ -93,14 +107,26 @@ function LibsSocial:GetDisplayText()
 		text = string.format('Battle.net: %d/%d', Friends.numBattleNetOnline, Friends.numBattleNetFriends)
 	elseif format == 'detailed' then
 		local parts = {}
-		if Friends.numCharacterFriends > 0 then
-			table.insert(parts, string.format('F:%d/%d', Friends.numCharacterOnline, Friends.numCharacterFriends))
-		end
-		if Friends.numBattleNetFriends > 0 then
-			table.insert(parts, string.format('B:%d/%d', Friends.numBattleNetOnline, Friends.numBattleNetFriends))
-		end
-		if IsInGuild() then
-			table.insert(parts, string.format('G:%d/%d', Friends.numGuildOnline, Friends.numGuildMembers))
+		if db.colorCodedCounts then
+			if Friends.numBattleNetFriends > 0 then
+				table.insert(parts, string.format('|cff%sB:%d/%d|r', COLORS.realid, Friends.numBattleNetOnline, Friends.numBattleNetFriends))
+			end
+			if Friends.numCharacterFriends > 0 then
+				table.insert(parts, string.format('|cff%sF:%d/%d|r', COLORS.friends, Friends.numCharacterOnline, Friends.numCharacterFriends))
+			end
+			if IsInGuild() then
+				table.insert(parts, string.format('|cff%sG:%d/%d|r', COLORS.guild, Friends.numGuildOnline, Friends.numGuildMembers))
+			end
+		else
+			if Friends.numBattleNetFriends > 0 then
+				table.insert(parts, string.format('B:%d/%d', Friends.numBattleNetOnline, Friends.numBattleNetFriends))
+			end
+			if Friends.numCharacterFriends > 0 then
+				table.insert(parts, string.format('F:%d/%d', Friends.numCharacterOnline, Friends.numCharacterFriends))
+			end
+			if IsInGuild() then
+				table.insert(parts, string.format('G:%d/%d', Friends.numGuildOnline, Friends.numGuildMembers))
+			end
 		end
 		text = table.concat(parts, ' | ')
 	else -- 'combined' default
@@ -109,8 +135,8 @@ function LibsSocial:GetDisplayText()
 		text = string.format('Friends: %d/%d', totalOnline, totalFriends)
 	end
 
-	-- Apply color coding
-	if db.colorByStatus then
+	-- Apply color coding (skip if colorCodedCounts already applied colors)
+	if db.colorByStatus and not (format == 'detailed' and db.colorCodedCounts) then
 		local totalOnline = Friends:GetTotalOnline()
 		if totalOnline > 0 then
 			text = '|cFF' .. COLORS.online .. text .. '|r'
@@ -141,87 +167,217 @@ function LibsSocial:CycleDisplayFormat()
 	self:UpdateDisplay()
 end
 
-function LibsSocial:BuildTooltip(tooltip)
-	local Friends = self.Friends
-	local TT = self.Tooltip
-	local db = self.db.profile
+---Format a status string for a player (icon or text based on settings)
+---@param afk boolean Is AFK
+---@param dnd boolean Is DND/Busy
+---@param mobile boolean? Is on mobile
+---@return string status Formatted status string
+local function FormatStatus(afk, dnd, mobile)
+	local db = LibsSocial.db.profile.display.tooltip
 
-	tooltip:SetText("Lib's Social")
+	local status = ''
+	if mobile then
+		status = ' |cffcccccc(Mobile)|r'
+	end
 
-	-- Battle.net Friends Section
-	if Friends.numBattleNetFriends > 0 then
-		tooltip:AddLine(' ')
-		tooltip:AddDoubleLine(
-			string.format('|cff%sBattle.net|r', COLORS.realid),
-			string.format('|cff%s%d online|r', Friends.numBattleNetOnline > 0 and COLORS.online or COLORS.offline, Friends.numBattleNetOnline)
-		)
+	if afk then
+		if db.useStatusIcons then
+			status = ' ' .. STATUS_ICON_AFK .. status
+		else
+			status = ' |cffffff00<AFK>|r' .. status
+		end
+	elseif dnd then
+		if db.useStatusIcons then
+			status = ' ' .. STATUS_ICON_DND .. status
+		else
+			status = ' |cffff0000<DND>|r' .. status
+		end
+	end
 
-		-- Sort online BNet friends into a list
-		local onlineBNet = {}
-		for _, info in pairs(Friends.battleNetFriends) do
-			-- Skip duplicate entries (indexed by both accountID and character name)
-			if info.isOnline and info.accountID and not onlineBNet[info.accountID] then
-				onlineBNet[info.accountID] = info
+	return status
+end
+
+---Format zone text with same-zone highlighting
+---@param zone string? Zone name
+---@return string zoneText Formatted zone text
+---@return number r Red
+---@return number g Green
+---@return number b Blue
+local function FormatZone(zone)
+	if not zone or zone == '' then
+		return '', 0.7, 0.7, 0.7
+	end
+
+	local db = LibsSocial.db.profile.display.tooltip
+	local playerZone = LibsSocial.Friends.playerZone
+
+	if db.highlightSameZone and playerZone ~= '' and zone == playerZone then
+		return zone, 0, 1, 0
+	end
+
+	return zone, 0.7, 0.7, 0.7
+end
+
+---Add a full-width line (spanning both columns) to the tooltip
+---@param tooltip table LibQTip-2.0 tooltip
+---@param text string Line text
+---@param r number? Red
+---@param g number? Green
+---@param b number? Blue
+local function AddFullLine(tooltip, text, r, g, b)
+	local row = tooltip:AddRow(text)
+	local cell = row:GetCell(1)
+	cell:SetColSpan(2)
+	if r then
+		cell:SetTextColor(r, g, b)
+	end
+	return row
+end
+
+---Set up a player row with right-click context menu and hover highlight
+---@param row table LibQTip-2.0 row
+---@param playerData table Player data for context menu
+local function SetupPlayerRow(row, playerData)
+	row:SetScript('OnMouseDown', function(frame, button)
+		if button == 'RightButton' and LibsSocial.PlayerMenu then
+			if playerData.accountID then
+				LibsSocial.PlayerMenu:ShowForBNet(playerData.accountName, playerData.accountID, playerData.characterName, frame)
+			elseif playerData.name then
+				LibsSocial.PlayerMenu:ShowForCharacter(playerData.fullName or playerData.name, frame)
 			end
 		end
+	end)
+end
 
-		for _, info in pairs(onlineBNet) do
-			local accountTag = info.battleTag or info.accountName or 'Unknown'
-			-- Remove the #number from battletags for cleaner display
-			accountTag = accountTag:gsub('#%d+$', '')
+---Add a collapsible section header row
+---@param tooltip table LibQTip-2.0 tooltip
+---@param text string Header text
+---@param countText string Right-side count text
+---@param sectionKey string Key into collapsedSections
+---@param color table? {r,g,b} color
+---@return boolean collapsed Whether section is collapsed
+local function AddSectionHeader(tooltip, text, countText, sectionKey, color)
+	local collapsed = LibsSocial.db.profile.display.collapsedSections[sectionKey] or false
+	local arrow = collapsed and '+' or '-'
 
-			local charInfo = ''
-			if info.characterName then
-				local charName = TT:ColorName(info.characterName, info.className)
-				local realm = info.realmName and ('-' .. info.realmName) or ''
-				charInfo = string.format('  %s%s', charName, realm)
-			end
+	local headerText
+	if color then
+		headerText = string.format('|cffffffff%s|r |cff%02x%02x%02x%s|r', arrow, color.r * 255, color.g * 255, color.b * 255, text)
+	else
+		headerText = string.format('|cffffffff%s|r %s', arrow, text)
+	end
 
-			local zone = info.areaName or ''
-			local status = ''
-			if info.isBnetAFK or info.isGameAFK then
-				status = ' |cffffff00<AFK>|r'
-			elseif info.isBnetDND or info.isGameBusy then
-				status = ' |cffff0000<DND>|r'
-			end
+	local row = tooltip:AddRow(headerText, countText)
+	row:SetColor(0.15, 0.15, 0.15, 0.5)
 
-			if info.characterName then
-				tooltip:AddDoubleLine(
-					string.format('|cff%s%s|r%s%s', COLORS.realid, accountTag, charInfo, status),
-					zone,
-					nil, nil, nil,
-					0.7, 0.7, 0.7
-				)
-			else
-				tooltip:AddLine(string.format('|cff%s%s|r%s', COLORS.realid, accountTag, status))
-			end
+	-- Click to toggle collapse
+	row:SetScript('OnMouseDown', function()
+		LibsSocial.db.profile.display.collapsedSections[sectionKey] = not collapsed
+		-- Rebuild the tooltip
+		if LibsSocial.activeAnchor then
+			LibsSocial:ShowCustomTooltip(LibsSocial.activeAnchor)
+		end
+	end)
+
+	return collapsed
+end
+
+---Show the custom tooltip anchored to a frame
+---@param anchor Frame The frame to anchor to
+function LibsSocial:ShowCustomTooltip(anchor)
+	-- Release any existing tooltip
+	if QTip:IsAcquiredTooltip(TOOLTIP_KEY) then
+		QTip:ReleaseTooltip(self.activeTooltip)
+	end
+
+	-- Store anchor for rebuilds (collapsible sections)
+	self.activeAnchor = anchor
+
+	-- Acquire 2-column tooltip (name left, zone right)
+	local tooltip = QTip:AcquireTooltip(TOOLTIP_KEY, 2, 'LEFT', 'RIGHT')
+	self.activeTooltip = tooltip
+
+	-- Configure max height for scrolling
+	tooltip:SetMaxHeight(UIParent:GetHeight() * 0.6)
+
+	-- Build content
+	self:BuildTooltipContent(tooltip)
+
+	-- Anchor + auto-hide
+	tooltip:SmartAnchorTo(anchor)
+	tooltip:SetAutoHideDelay(0.25, anchor)
+	tooltip:UpdateLayout()
+	tooltip:Show()
+end
+
+---Build all tooltip content sections
+---@param tooltip table LibQTip-2.0 tooltip
+function LibsSocial:BuildTooltipContent(tooltip)
+	local Friends = self.Friends
+	local TT = self.Tooltip
+	local GC = self.GameClients
+	local db = self.db.profile
+	local ttDb = db.display.tooltip
+
+	-- Title
+	local titleRow = tooltip:AddHeadingRow("Lib's Social")
+	titleRow:GetCell(1):SetColSpan(2)
+
+	-- Battle.net Friends
+	if Friends.numBattleNetFriends > 0 then
+		if ttDb.separateBNetSections then
+			self:BuildBNetInGameSection(tooltip, Friends, TT, GC, ttDb)
+			self:BuildBNetAppSection(tooltip, Friends, TT, GC, ttDb)
+		else
+			self:BuildBNetCombinedSection(tooltip, Friends, TT, GC, ttDb)
 		end
 	end
 
 	-- Character Friends Section
 	if Friends.numCharacterFriends > 0 then
-		tooltip:AddLine(' ')
-		tooltip:AddDoubleLine(
-			string.format('|cff%sFriends|r', COLORS.friends),
-			string.format('|cff%s%d online|r', Friends.numCharacterOnline > 0 and COLORS.online or COLORS.offline, Friends.numCharacterOnline)
+		tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+		local collapsed = AddSectionHeader(
+			tooltip,
+			'Friends',
+			string.format('|cff%s%d online|r', Friends.numCharacterOnline > 0 and COLORS.online or COLORS.offline, Friends.numCharacterOnline),
+			'characterFriends',
+			SECTION_COLORS.friends
 		)
 
-		for name, info in pairs(Friends.characterFriends) do
-			if info.connected then
-				local coloredName = TT:ColorName(name, info.class)
-				local levelStr = TT:ColorLevel(info.level or 0)
-				local zone = info.area or ''
-				local status = ''
-				if info.mobile then
-					status = ' |cffcccccc(Mobile)|r'
-				end
+		if not collapsed then
+			for name, info in pairs(Friends.characterFriends) do
+				if info.connected then
+					local coloredName = TT:ColorName(name, info.class)
+					local leftParts = { coloredName }
 
-				tooltip:AddDoubleLine(
-					string.format('%s (%s %s)%s', coloredName, levelStr, info.class or '??', status),
-					zone,
-					nil, nil, nil,
-					0.7, 0.7, 0.7
-				)
+					if ttDb.showLevels then
+						table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
+					end
+
+					local status = FormatStatus(false, false, info.mobile)
+					if status ~= '' then
+						table.insert(leftParts, status)
+					end
+
+					local leftStr = table.concat(leftParts)
+					local zone, zr, zg, zb = FormatZone(info.area)
+					local rightStr = ttDb.showZones and zone or nil
+
+					local row = tooltip:AddRow(leftStr, rightStr)
+					if rightStr and rightStr ~= '' then
+						row:GetCell(2):SetTextColor(zr, zg, zb)
+					end
+
+					SetupPlayerRow(row, {
+						name = name,
+						fullName = name,
+					})
+
+					-- Notes
+					if ttDb.showNotes and info.notes and info.notes ~= '' then
+						AddFullLine(tooltip, '   |cffaaaaaa' .. info.notes .. '|r')
+					end
+				end
 			end
 		end
 	end
@@ -229,51 +385,231 @@ function LibsSocial:BuildTooltip(tooltip)
 	-- Guild Section
 	if IsInGuild() then
 		local guildName = GetGuildInfo('player')
-		tooltip:AddLine(' ')
-		tooltip:AddDoubleLine(
-			string.format('|cff%sGuild: %s|r', COLORS.guild, guildName or ''),
-			string.format('|cff%s%d online|r', Friends.numGuildOnline > 0 and COLORS.online or COLORS.offline, Friends.numGuildOnline)
+
+		tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+		local collapsed = AddSectionHeader(
+			tooltip,
+			'Guild: ' .. (guildName or ''),
+			string.format('|cff%s%d online|r', Friends.numGuildOnline > 0 and COLORS.online or COLORS.offline, Friends.numGuildOnline),
+			'guild',
+			SECTION_COLORS.guild
 		)
 
-		-- Sort guild members by rank index (lower = higher rank)
-		local onlineGuild = {}
-		for _, info in pairs(Friends.guildMembers) do
-			if info.online then
-				table.insert(onlineGuild, info)
+		if not collapsed then
+			-- Sort guild members by rank index
+			local onlineGuild = {}
+			for _, info in pairs(Friends.guildMembers) do
+				if info.online then
+					table.insert(onlineGuild, info)
+				end
 			end
-		end
-		table.sort(onlineGuild, function(a, b)
-			return (a.rankIndex or 99) < (b.rankIndex or 99)
-		end)
+			table.sort(onlineGuild, function(a, b)
+				return (a.rankIndex or 99) < (b.rankIndex or 99)
+			end)
 
-		for _, info in ipairs(onlineGuild) do
-			local coloredName = TT:ColorName(info.name, info.classFileName)
-			local zone = info.zone or ''
-			local rank = info.rank or ''
-			local status = ''
-			if info.mobile then
-				status = ' |cffcccccc(Mobile)|r'
+			for _, info in ipairs(onlineGuild) do
+				local coloredName = TT:ColorName(info.name, info.classFileName)
+				local leftParts = { coloredName }
+
+				if ttDb.showLevels then
+					table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
+				end
+
+				if ttDb.showRank and info.rank then
+					table.insert(leftParts, ' |cffaaaaaa' .. info.rank .. '|r')
+				end
+
+				local status = FormatStatus(info.status == 1, info.status == 2, info.mobile)
+				if status ~= '' then
+					table.insert(leftParts, status)
+				end
+
+				local leftStr = table.concat(leftParts)
+				local zone, zr, zg, zb = FormatZone(info.zone)
+				local rightStr = ttDb.showZones and zone or nil
+
+				local row = tooltip:AddRow(leftStr, rightStr)
+				if rightStr and rightStr ~= '' then
+					row:GetCell(2):SetTextColor(zr, zg, zb)
+				end
+
+				SetupPlayerRow(row, {
+					name = info.name,
+					fullName = info.fullName,
+				})
+
+				-- Notes
+				if ttDb.showNotes and info.note and info.note ~= '' then
+					AddFullLine(tooltip, '   |cffaaaaaa' .. info.note .. '|r')
+				end
+				if ttDb.showOfficerNotes and info.officernote and info.officernote ~= '' then
+					AddFullLine(tooltip, '   |cffff8800[O] ' .. info.officernote .. '|r')
+				end
 			end
-
-			tooltip:AddDoubleLine(
-				string.format('%s (%s)%s', coloredName, rank, status),
-				zone,
-				nil, nil, nil,
-				0.7, 0.7, 0.7
-			)
 		end
 	end
 
 	-- Status info
-	tooltip:AddLine(' ')
-	local blockStatus = db.blocking.enabled and '|cff00ff00Enabled|r' or '|cffff0000Disabled|r'
-	local acceptStatus = db.autoAccept.enabled and '|cff00ff00Enabled|r' or '|cffff0000Disabled|r'
-	tooltip:AddLine(string.format('Blocking: %s | Auto-accept: %s', blockStatus, acceptStatus))
+	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	local blockStatus = db.blocking.enabled and '|cff00ff00On|r' or '|cffff0000Off|r'
+	local acceptStatus = db.autoAccept.enabled and '|cff00ff00On|r' or '|cffff0000Off|r'
+	AddFullLine(tooltip, string.format('Block: %s | Auto-accept: %s', blockStatus, acceptStatus), 0.6, 0.6, 0.6)
 
 	-- Click hints
-	tooltip:AddLine(' ')
-	tooltip:AddLine('|cffffff00Left Click:|r Friends | |cffffff00Right:|r Cycle Format')
-	tooltip:AddLine('|cffffff00Shift+Left:|r Options | |cffffff00Middle:|r Guild')
+	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	AddFullLine(tooltip, '|cffffff00Left Click:|r Friends  |cffffff00Right:|r Cycle Format', 0.5, 0.5, 0.5)
+	AddFullLine(tooltip, '|cffffff00Shift+Left:|r Options  |cffffff00Middle:|r Guild  |cffffff00Right-click player:|r Menu', 0.5, 0.5, 0.5)
 
-	tooltip:Show()
+	-- Apply extra width if configured
+	local extraWidth = db.display.tooltip.extraWidth or 0
+	if extraWidth > 0 then
+		-- Set min width on title cell to force tooltip wider
+		titleRow:GetCell(1):SetMinWidth(300 + extraWidth)
+	end
+end
+
+---Build BNet In-Game section
+---@param tooltip table LibQTip-2.0 tooltip
+---@param Friends table Friends data
+---@param TT table Tooltip helpers
+---@param GC table GameClients
+---@param ttDb table Tooltip settings
+function LibsSocial:BuildBNetInGameSection(tooltip, Friends, TT, GC, ttDb)
+	if Friends.numBattleNetInGame == 0 then
+		return
+	end
+
+	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	local collapsed = AddSectionHeader(tooltip, 'Battle.net (In Game)', string.format('|cff%s%d|r', COLORS.online, Friends.numBattleNetInGame), 'battleNetInGame', SECTION_COLORS.bnet)
+
+	if not collapsed then
+		for _, info in pairs(Friends.battleNetInGame) do
+			self:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
+		end
+	end
+end
+
+---Build BNet App/Launcher section
+---@param tooltip table LibQTip-2.0 tooltip
+---@param Friends table Friends data
+---@param TT table Tooltip helpers
+---@param GC table GameClients
+---@param ttDb table Tooltip settings
+function LibsSocial:BuildBNetAppSection(tooltip, Friends, TT, GC, ttDb)
+	if Friends.numBattleNetAppOnly == 0 then
+		return
+	end
+
+	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	local collapsed = AddSectionHeader(tooltip, 'Battle.net (App)', string.format('|cff%s%d|r', COLORS.offline, Friends.numBattleNetAppOnly), 'battleNetApp', SECTION_COLORS.bnet)
+
+	if not collapsed then
+		for _, info in pairs(Friends.battleNetAppOnly) do
+			self:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
+		end
+	end
+end
+
+---Build combined BNet section (when separateBNetSections is off)
+---@param tooltip table LibQTip-2.0 tooltip
+---@param Friends table Friends data
+---@param TT table Tooltip helpers
+---@param GC table GameClients
+---@param ttDb table Tooltip settings
+function LibsSocial:BuildBNetCombinedSection(tooltip, Friends, TT, GC, ttDb)
+	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	local collapsed = AddSectionHeader(
+		tooltip,
+		'Battle.net',
+		string.format('|cff%s%d online|r', Friends.numBattleNetOnline > 0 and COLORS.online or COLORS.offline, Friends.numBattleNetOnline),
+		'battleNetInGame',
+		SECTION_COLORS.bnet
+	)
+
+	if not collapsed then
+		-- Deduplicate: only process by accountID
+		local seen = {}
+		for _, info in pairs(Friends.battleNetFriends) do
+			if info.isOnline and info.accountID and not seen[info.accountID] then
+				seen[info.accountID] = true
+				self:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
+			end
+		end
+	end
+end
+
+---Add a single BNet friend line to the tooltip
+---@param tooltip table LibQTip-2.0 tooltip
+---@param TT table Tooltip helpers
+---@param GC table GameClients
+---@param ttDb table Tooltip settings
+---@param info table Friend data
+function LibsSocial:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
+	local accountTag = info.battleTag or info.accountName or 'Unknown'
+	accountTag = accountTag:gsub('#%d+$', '')
+
+	local leftParts = { string.format('|cff%s%s|r', COLORS.realid, accountTag) }
+
+	-- Character info for WoW players
+	if info.characterName then
+		local charName = TT:ColorName(info.characterName, info.className)
+		table.insert(leftParts, '  ' .. charName)
+
+		if ttDb.showLevels and info.characterLevel and info.characterLevel > 0 then
+			table.insert(leftParts, ' (' .. TT:ColorLevel(info.characterLevel) .. ')')
+		end
+	end
+
+	-- Game client tag for non-WoW games
+	if ttDb.showGameClient and info.clientProgram and info.clientProgram ~= 'WoW' and not GC.IsAppClient(info.clientProgram) then
+		local clientTag = GC.GetClientDisplayName(info.clientProgram)
+		table.insert(leftParts, string.format(' |cffaaaaaa[%s]|r', clientTag))
+	end
+
+	-- WoW project label (only if different from player's)
+	if ttDb.showWowProject and info.clientProgram == 'WoW' and info.wowProjectID then
+		local myProject = WOW_PROJECT_ID
+		if info.wowProjectID ~= myProject then
+			local label = GC.GetProjectLabel(info.wowProjectID)
+			table.insert(leftParts, string.format(' |cffcccccc(%s)|r', label))
+		end
+	end
+
+	-- Status
+	local isAFK = info.isBnetAFK or info.isGameAFK
+	local isDND = info.isBnetDND or info.isGameBusy
+	local status = FormatStatus(isAFK, isDND, false)
+	if status ~= '' then
+		table.insert(leftParts, status)
+	end
+
+	local leftStr = table.concat(leftParts)
+
+	-- Zone (right side)
+	local rightStr = nil
+	local zr, zg, zb = 0.7, 0.7, 0.7
+	if ttDb.showZones and info.areaName and info.areaName ~= '' then
+		rightStr, zr, zg, zb = FormatZone(info.areaName)
+	end
+
+	local row = tooltip:AddRow(leftStr, rightStr)
+	if rightStr and rightStr ~= '' then
+		row:GetCell(2):SetTextColor(zr, zg, zb)
+	end
+
+	SetupPlayerRow(row, {
+		accountID = info.accountID,
+		accountName = info.accountName or info.battleTag,
+		characterName = info.characterName,
+	})
+
+	-- Broadcast message
+	if ttDb.showBroadcasts and info.customMessage and info.customMessage ~= '' then
+		AddFullLine(tooltip, '   |cff00A2E8' .. info.customMessage .. '|r')
+	end
+
+	-- Note
+	if ttDb.showNotes and info.noteText and info.noteText ~= '' then
+		AddFullLine(tooltip, '   |cffaaaaaa' .. info.noteText .. '|r')
+	end
 end

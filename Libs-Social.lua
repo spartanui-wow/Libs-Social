@@ -2,7 +2,7 @@
 local ADDON_NAME, LibsSocial = ...
 
 -- Create the addon using AceAddon
-LibsSocial = LibStub('AceAddon-3.0'):NewAddon(ADDON_NAME, 'AceEvent-3.0', 'AceConsole-3.0')
+LibsSocial = LibStub('AceAddon-3.0'):NewAddon(ADDON_NAME, 'AceEvent-3.0', 'AceConsole-3.0', 'AceBucket-3.0')
 _G.LibsSocial = LibsSocial
 
 LibsSocial.version = '1.0.0'

@@ -55,6 +55,19 @@ function Tooltip:GetStatusString(online, mobile, afk, dnd)
 	return status
 end
 
+---Get a status icon texture string
+---@param afk boolean Is AFK
+---@param dnd boolean Is DND
+---@return string icon Inline texture string or empty
+function Tooltip:GetStatusIcon(afk, dnd)
+	if afk then
+		return '|TInterface\\FriendsFrame\\StatusIcon-Away:0|t'
+	elseif dnd then
+		return '|TInterface\\FriendsFrame\\StatusIcon-DnD:0|t'
+	end
+	return ''
+end
+
 ---Format level with difficulty color
 ---@param level number Player level
 ---@return string Colored level string

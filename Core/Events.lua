@@ -2,19 +2,24 @@
 local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 
 function LibsSocial:RegisterEvents()
-	-- Friend list events
-	self:RegisterEvent('FRIENDLIST_UPDATE', 'OnFriendListUpdate')
-	self:RegisterEvent('BN_FRIEND_INFO_CHANGED', 'OnFriendListUpdate')
-	self:RegisterEvent('BN_FRIEND_ACCOUNT_ONLINE', 'OnFriendListUpdate')
-	self:RegisterEvent('BN_FRIEND_ACCOUNT_OFFLINE', 'OnFriendListUpdate')
-	self:RegisterEvent('GUILD_ROSTER_UPDATE', 'OnFriendListUpdate')
-	self:RegisterEvent('GROUP_ROSTER_UPDATE', 'OnFriendListUpdate')
+	-- Friend list events (bucketed to avoid rapid-fire refreshes)
+	self:RegisterBucketEvent({
+		'FRIENDLIST_UPDATE',
+		'BN_FRIEND_INFO_CHANGED',
+		'BN_FRIEND_ACCOUNT_ONLINE',
+		'BN_FRIEND_ACCOUNT_OFFLINE',
+		'GUILD_ROSTER_UPDATE',
+		'GROUP_ROSTER_UPDATE',
+	}, 1, 'OnFriendListUpdateBucket')
+
+	-- Zone tracking for same-zone highlighting
+	self:RegisterEvent('ZONE_CHANGED_NEW_AREA', 'OnZoneChanged')
 
 	-- Blocking events
 	self:RegisterEvent('DUEL_REQUESTED', 'OnDuelRequested')
 	self:RegisterEvent('PET_BATTLE_PVP_DUEL_REQUESTED', 'OnPetDuelRequested')
 	self:RegisterEvent('PARTY_INVITE_REQUEST', 'OnPartyInviteRequest')
-	self:RegisterEvent('BN_FRIEND_INVITE_RECEIVED', 'OnFriendInviteReceived')
+	self:RegisterEvent('BN_FRIEND_INVITE_ADDED', 'OnFriendInviteReceived')
 	self:RegisterEvent('QUEST_ACCEPT_CONFIRM', 'OnQuestAcceptConfirm')
 
 	-- Auto-accept events
@@ -43,7 +48,7 @@ function LibsSocial:OnPlayerEnteringWorld()
 	end
 end
 
-function LibsSocial:OnFriendListUpdate()
+function LibsSocial:OnFriendListUpdateBucket()
 	-- Update cached friend data
 	if self.Friends and self.Friends.RefreshData then
 		self.Friends:RefreshData()
@@ -52,6 +57,12 @@ function LibsSocial:OnFriendListUpdate()
 	-- Update display
 	if self.UpdateDisplay then
 		self:UpdateDisplay()
+	end
+end
+
+function LibsSocial:OnZoneChanged()
+	if self.Friends then
+		self.Friends:RefreshPlayerZone()
 	end
 end
 

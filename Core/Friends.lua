@@ -7,6 +7,8 @@ LibsSocial.Friends = Friends
 -- Cached data
 Friends.characterFriends = {}
 Friends.battleNetFriends = {}
+Friends.battleNetInGame = {}
+Friends.battleNetAppOnly = {}
 Friends.guildMembers = {}
 Friends.communityMembers = {}
 
@@ -15,8 +17,13 @@ Friends.numCharacterFriends = 0
 Friends.numCharacterOnline = 0
 Friends.numBattleNetFriends = 0
 Friends.numBattleNetOnline = 0
+Friends.numBattleNetInGame = 0
+Friends.numBattleNetAppOnly = 0
 Friends.numGuildMembers = 0
 Friends.numGuildOnline = 0
+
+-- Player zone for same-zone highlighting
+Friends.playerZone = ''
 
 function LibsSocial:InitializeFriends()
 	Friends:RefreshData()
@@ -26,6 +33,11 @@ function Friends:RefreshData()
 	self:RefreshCharacterFriends()
 	self:RefreshBattleNetFriends()
 	self:RefreshGuildMembers()
+	self:RefreshPlayerZone()
+end
+
+function Friends:RefreshPlayerZone()
+	self.playerZone = GetRealZoneText() or ''
 end
 
 function Friends:RefreshCharacterFriends()
@@ -52,19 +64,44 @@ end
 
 function Friends:RefreshBattleNetFriends()
 	wipe(self.battleNetFriends)
+	wipe(self.battleNetInGame)
+	wipe(self.battleNetAppOnly)
 
+	local GameClients = LibsSocial.GameClients
 	local numFriends, numOnline = BNGetNumFriends()
 	self.numBattleNetFriends = numFriends or 0
 	self.numBattleNetOnline = numOnline or 0
+	self.numBattleNetInGame = 0
+	self.numBattleNetAppOnly = 0
 
 	for i = 1, self.numBattleNetFriends do
 		local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
 		if accountInfo then
-			local gameInfo = accountInfo.gameAccountInfo
-			local characterName = gameInfo and gameInfo.characterName
-			local realmName = gameInfo and gameInfo.realmName
+			-- Find the best game account among multiple game accounts
+			-- Prefer: in-game with hasFocus > in-game > app with hasFocus > app
+			local numGameAccounts = C_BattleNet.GetFriendNumGameAccounts(i)
+			local bestGameInfo = accountInfo.gameAccountInfo
+			local bestIsApp = GameClients.IsAppClient(bestGameInfo and bestGameInfo.clientProgram)
 
-			self.battleNetFriends[accountInfo.bnetAccountID] = {
+			if numGameAccounts > 1 then
+				for j = 1, numGameAccounts do
+					local gameAccountInfo = C_BattleNet.GetFriendGameAccountInfo(i, j)
+					if gameAccountInfo then
+						local isApp = GameClients.IsAppClient(gameAccountInfo.clientProgram)
+						-- Prefer game clients over app, and hasFocus within same tier
+						if (bestIsApp and not isApp) or (bestIsApp == isApp and gameAccountInfo.hasFocus) then
+							bestGameInfo = gameAccountInfo
+							bestIsApp = isApp
+						end
+					end
+				end
+			end
+
+			local characterName = bestGameInfo and bestGameInfo.characterName
+			local realmName = bestGameInfo and bestGameInfo.realmName
+			local clientProgram = bestGameInfo and bestGameInfo.clientProgram
+
+			local friendData = {
 				accountID = accountInfo.bnetAccountID,
 				accountName = accountInfo.accountName,
 				battleTag = accountInfo.battleTag,
@@ -73,18 +110,35 @@ function Friends:RefreshBattleNetFriends()
 				isBnetDND = accountInfo.isDND,
 				characterName = characterName,
 				realmName = realmName,
-				characterLevel = gameInfo and gameInfo.characterLevel,
-				className = gameInfo and gameInfo.className,
-				areaName = gameInfo and gameInfo.areaName,
-				isGameBusy = gameInfo and gameInfo.isGameBusy,
-				isGameAFK = gameInfo and gameInfo.isGameAFK,
-				wowProjectID = gameInfo and gameInfo.wowProjectID,
+				characterLevel = bestGameInfo and bestGameInfo.characterLevel,
+				className = bestGameInfo and bestGameInfo.className,
+				areaName = bestGameInfo and bestGameInfo.areaName,
+				isGameBusy = bestGameInfo and bestGameInfo.isGameBusy,
+				isGameAFK = bestGameInfo and bestGameInfo.isGameAFK,
+				wowProjectID = bestGameInfo and bestGameInfo.wowProjectID,
+				clientProgram = clientProgram,
+				noteText = accountInfo.note,
+				customMessage = accountInfo.customMessage,
+				customMessageTime = accountInfo.customMessageTime,
 			}
+
+			self.battleNetFriends[accountInfo.bnetAccountID] = friendData
 
 			-- Also index by character name if available
 			if characterName then
 				local fullName = realmName and (characterName .. '-' .. realmName) or characterName
-				self.battleNetFriends[fullName] = self.battleNetFriends[accountInfo.bnetAccountID]
+				self.battleNetFriends[fullName] = friendData
+			end
+
+			-- Classify into in-game vs app-only for separated display
+			if accountInfo.isOnline then
+				if GameClients.IsAppClient(clientProgram) then
+					self.battleNetAppOnly[accountInfo.bnetAccountID] = friendData
+					self.numBattleNetAppOnly = self.numBattleNetAppOnly + 1
+				else
+					self.battleNetInGame[accountInfo.bnetAccountID] = friendData
+					self.numBattleNetInGame = self.numBattleNetInGame + 1
+				end
 			end
 		end
 	end

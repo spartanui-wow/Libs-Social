@@ -33,6 +33,27 @@ local defaults = {
 			showMobileIndicators = true,
 			showStatusIcons = true,
 			colorByStatus = true,
+			colorCodedCounts = false, -- Color each category in detailed format
+			tooltip = {
+				extraWidth = 0, -- 0-200 additional pixel width
+				showLevels = true,
+				showNotes = true,
+				showOfficerNotes = false,
+				showZones = true,
+				showRank = true,
+				showBroadcasts = true,
+				showGameClient = true,
+				showWowProject = true,
+				highlightSameZone = true,
+				useStatusIcons = true,
+				separateBNetSections = true,
+			},
+			collapsedSections = {
+				battleNetInGame = false,
+				battleNetApp = false,
+				characterFriends = false,
+				guild = false,
+			},
 		},
 		-- Minimap button
 		minimap = {

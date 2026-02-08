@@ -21,21 +21,25 @@ Libs-Social/
 │   ├── AutoAccept.lua           # Auto-accept party invites from friends
 │   └── FriendTreatment.lua      # Treat guild/community members as friends
 ├── UI/
-│   ├── DataBroker.lua           # LDB data source + tooltip with BNet/Friends/Guild sections
+│   ├── GameClients.lua          # BNet game client constants + WoW project helpers
+│   ├── PlayerMenu.lua           # Right-click context menu (Whisper, Invite, Copy Name)
+│   ├── DataBroker.lua           # LDB data source + LibQTip-2.0 tooltip with BNet/Friends/Guild sections
 │   ├── Tooltip.lua              # Helper functions: ColorName, GetStatusString, ColorLevel
-│   ├── Options.lua              # AceConfig options panel
+│   ├── Options.lua              # AceConfig options panel with tooltip display toggles
 │   └── MinimapButton.lua        # LibDBIcon integration
-└── libs/                        # Embedded Ace3 + LDB + LibDBIcon (populated by packager)
+└── libs/                        # Embedded Ace3 + LDB + LibDBIcon + LibQTip-2.0
 ```
 
 ## Key Design Decisions
 
-### Tooltip (Major Feature)
-The tooltip shows three fully-detailed sections:
-- **Battle.net**: BattleTag (stripped #number), class-colored character name, realm, zone, AFK/DND status
-- **Friends**: Class-colored name, difficulty-colored level, class, zone, mobile indicator
-- **Guild**: Class-colored name sorted by rank, rank name, zone, mobile indicator
-- Deduplicates BNet friends (dual-indexed by accountID and character name)
+### Tooltip (Major Feature — LibQTip-2.0)
+Uses LibQTip-2.0 for multi-column, scrollable tooltips with per-row click handlers and auto-hide.
+- **LibQTip-2.0 API**: `AcquireTooltip` / `ReleaseTooltip` pattern, `SmartAnchorTo`, `SetAutoHideDelay`, `SetMaxHeight` for scrolling
+- **Collapsible sections**: Click headers to collapse/expand; persisted in `db.profile.display.collapsedSections`
+- **Right-click menus**: Per-row `OnMouseDown` scripts → `PlayerMenu:ShowForCharacter/ShowForBNet`
+- **Sections**: BNet In-Game, BNet App (or combined), Character Friends, Guild
+- **Toggleable features**: Levels, notes, officer notes, zones, rank, broadcasts, game client, WoW project, same-zone highlighting, status icons
+- **Event bucketing**: AceBucket-3.0 (1s bucket) for friend/guild event coalescing
 
 ### Friend Treatment System
 - `IsTreatedAsFriend(name)` checks: character friend OR BNet friend OR guild member (if `guildAsFriends` enabled)
@@ -73,7 +77,7 @@ Cycleable via right-click: `combined` | `friends` | `guild` | `realid` | `detail
 
 ### Blocking
 - `DUEL_REQUESTED`, `PET_BATTLE_PVP_DUEL_REQUESTED`, `PARTY_INVITE_REQUEST`
-- `BN_FRIEND_INVITE_RECEIVED`, `QUEST_ACCEPT_CONFIRM`
+- `BN_FRIEND_INVITE_ADDED`, `QUEST_ACCEPT_CONFIRM`
 
 ## Slash Commands
 
