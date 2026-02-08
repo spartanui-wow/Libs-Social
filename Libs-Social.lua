@@ -41,6 +41,31 @@ function LibsSocial:OnEnable()
 	-- Register core events
 	self:RegisterEvents()
 
+	-- Register with Addon Compartment (10.x+ dropdown)
+	if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
+		AddonCompartmentFrame:RegisterAddon({
+			text = "Lib's Social",
+			icon = 'Interface/FriendsFrame/UI-Toast-FriendOnlineIcon',
+			registerForAnyClick = true,
+			notCheckable = true,
+			func = function(_, _, _, _, mouseButton)
+				if mouseButton == 'LeftButton' then
+					ToggleFriendsFrame()
+				else
+					self:OpenOptions()
+				end
+			end,
+			funcOnEnter = function()
+				GameTooltip:SetOwner(AddonCompartmentFrame, 'ANCHOR_CURSOR_RIGHT')
+				GameTooltip:AddLine("|cffffffffLib's|r |cffe21f1fSocial|r", 1, 1, 1)
+				GameTooltip:AddLine(' ')
+				GameTooltip:AddLine('|cffeda55fLeft-Click|r to toggle friends panel.', 1, 1, 1)
+				GameTooltip:AddLine('|cffeda55fRight-Click|r to open options.', 1, 1, 1)
+				GameTooltip:Show()
+			end,
+		})
+	end
+
 	self:Log(self.addonName .. ' v' .. self.version .. ' loaded', 'info')
 end
 
