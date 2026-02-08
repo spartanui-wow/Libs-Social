@@ -218,6 +218,23 @@ local function FormatZone(zone)
 	return zone, 0.7, 0.7, 0.7
 end
 
+---Get a group indicator prefix if the player is in the current group/raid
+---@param name string Character name (may include realm)
+---@return string indicator Green checkmark prefix or empty string
+local function GetGroupIndicator(name)
+	if not name or name == '' then
+		return ''
+	end
+
+	-- Try both the raw name and the ambiguated version
+	local short = Ambiguate(name, 'none')
+	if UnitInParty(short) or UnitInRaid(short) or UnitInParty(name) or UnitInRaid(name) then
+		return '|cff00ff00\226\156\147|r '  -- Green checkmark ✓
+	end
+
+	return ''
+end
+
 ---Add a full-width line (spanning both columns) to the tooltip
 ---@param tooltip table LibQTip-2.0 tooltip
 ---@param text string Line text
@@ -369,8 +386,9 @@ function LibsSocial:BuildTooltipContent(tooltip)
 		if not collapsed then
 			for name, info in pairs(Friends.characterFriends) do
 				if info.connected then
+					local groupIcon = GetGroupIndicator(name)
 					local coloredName = TT:ColorName(name, info.class)
-					local leftParts = { coloredName }
+					local leftParts = { groupIcon .. coloredName }
 
 					if ttDb.showLevels then
 						table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
@@ -430,8 +448,9 @@ function LibsSocial:BuildTooltipContent(tooltip)
 			end)
 
 			for _, info in ipairs(onlineGuild) do
+				local groupIcon = GetGroupIndicator(info.fullName or info.name)
 				local coloredName = TT:ColorName(info.name, info.classFileName)
-				local leftParts = { coloredName }
+				local leftParts = { groupIcon .. coloredName }
 
 				if ttDb.showLevels then
 					table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
@@ -570,7 +589,8 @@ function LibsSocial:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 	local accountTag = info.battleTag or info.accountName or 'Unknown'
 	accountTag = accountTag:gsub('#%d+$', '')
 
-	local leftParts = { string.format('|cff%s%s|r', COLORS.realid, accountTag) }
+	local groupIcon = info.characterName and GetGroupIndicator(info.characterName) or ''
+	local leftParts = { groupIcon .. string.format('|cff%s%s|r', COLORS.realid, accountTag) }
 
 	-- Character info for WoW players
 	if info.characterName then
