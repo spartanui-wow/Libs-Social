@@ -235,10 +235,12 @@ local function AddFullLine(tooltip, text, r, g, b)
 end
 
 ---Set up a player row with right-click context menu and hover highlight
+---Scripts must be set on cells (not rows) because cells have higher frame level and intercept mouse events.
 ---@param row table LibQTip-2.0 row
 ---@param playerData table Player data for context menu
-local function SetupPlayerRow(row, playerData)
-	row:SetScript('OnMouseDown', function(frame, button)
+---@param numCols number Number of columns in the tooltip
+local function SetupPlayerRow(row, playerData, numCols)
+	local handler = function(frame, button)
 		if button == 'RightButton' and LibsSocial.PlayerMenu then
 			if playerData.accountID then
 				LibsSocial.PlayerMenu:ShowForBNet(playerData.accountName, playerData.accountID, playerData.characterName, frame)
@@ -246,7 +248,15 @@ local function SetupPlayerRow(row, playerData)
 				LibsSocial.PlayerMenu:ShowForCharacter(playerData.fullName or playerData.name, frame)
 			end
 		end
-	end)
+	end
+
+	-- Set script on each cell so clicks are captured regardless of which column is clicked
+	for i = 1, numCols do
+		local cell = row:GetCell(i)
+		if cell then
+			cell:SetScript('OnMouseDown', handler)
+		end
+	end
 end
 
 ---Add a collapsible section header row
@@ -270,14 +280,17 @@ local function AddSectionHeader(tooltip, text, countText, sectionKey, color)
 	local row = tooltip:AddRow(headerText, countText)
 	row:SetColor(0.15, 0.15, 0.15, 0.5)
 
-	-- Click to toggle collapse
-	row:SetScript('OnMouseDown', function()
+	-- Click to toggle collapse — set on cells since they intercept mouse events above rows
+	local toggleHandler = function()
 		LibsSocial.db.profile.display.collapsedSections[sectionKey] = not collapsed
 		-- Rebuild the tooltip
 		if LibsSocial.activeAnchor then
 			LibsSocial:ShowCustomTooltip(LibsSocial.activeAnchor)
 		end
-	end)
+	end
+
+	row:GetCell(1):SetScript('OnMouseDown', toggleHandler)
+	row:GetCell(2):SetScript('OnMouseDown', toggleHandler)
 
 	return collapsed
 end
@@ -335,7 +348,7 @@ function LibsSocial:BuildTooltipContent(tooltip)
 
 	-- Character Friends Section
 	if Friends.numCharacterFriends > 0 then
-		tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+		tooltip:AddSeparator()
 		local collapsed = AddSectionHeader(
 			tooltip,
 			'Friends',
@@ -371,7 +384,7 @@ function LibsSocial:BuildTooltipContent(tooltip)
 					SetupPlayerRow(row, {
 						name = name,
 						fullName = name,
-					})
+					}, 2)
 
 					-- Notes
 					if ttDb.showNotes and info.notes and info.notes ~= '' then
@@ -386,7 +399,7 @@ function LibsSocial:BuildTooltipContent(tooltip)
 	if IsInGuild() then
 		local guildName = GetGuildInfo('player')
 
-		tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+		tooltip:AddSeparator()
 		local collapsed = AddSectionHeader(
 			tooltip,
 			'Guild: ' .. (guildName or ''),
@@ -436,7 +449,7 @@ function LibsSocial:BuildTooltipContent(tooltip)
 				SetupPlayerRow(row, {
 					name = info.name,
 					fullName = info.fullName,
-				})
+				}, 2)
 
 				-- Notes
 				if ttDb.showNotes and info.note and info.note ~= '' then
@@ -450,13 +463,13 @@ function LibsSocial:BuildTooltipContent(tooltip)
 	end
 
 	-- Status info
-	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	tooltip:AddSeparator()
 	local blockStatus = db.blocking.enabled and '|cff00ff00On|r' or '|cffff0000Off|r'
 	local acceptStatus = db.autoAccept.enabled and '|cff00ff00On|r' or '|cffff0000Off|r'
 	AddFullLine(tooltip, string.format('Block: %s | Auto-accept: %s', blockStatus, acceptStatus), 0.6, 0.6, 0.6)
 
 	-- Click hints
-	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	tooltip:AddSeparator()
 	AddFullLine(tooltip, '|cffffff00Left Click:|r Friends  |cffffff00Right:|r Cycle Format', 0.5, 0.5, 0.5)
 	AddFullLine(tooltip, '|cffffff00Shift+Left:|r Options  |cffffff00Middle:|r Guild  |cffffff00Right-click player:|r Menu', 0.5, 0.5, 0.5)
 
@@ -479,7 +492,7 @@ function LibsSocial:BuildBNetInGameSection(tooltip, Friends, TT, GC, ttDb)
 		return
 	end
 
-	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	tooltip:AddSeparator()
 	local collapsed = AddSectionHeader(tooltip, 'Battle.net (In Game)', string.format('|cff%s%d|r', COLORS.online, Friends.numBattleNetInGame), 'battleNetInGame', SECTION_COLORS.bnet)
 
 	if not collapsed then
@@ -500,7 +513,7 @@ function LibsSocial:BuildBNetAppSection(tooltip, Friends, TT, GC, ttDb)
 		return
 	end
 
-	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	tooltip:AddSeparator()
 	local collapsed = AddSectionHeader(tooltip, 'Battle.net (App)', string.format('|cff%s%d|r', COLORS.offline, Friends.numBattleNetAppOnly), 'battleNetApp', SECTION_COLORS.bnet)
 
 	if not collapsed then
@@ -517,7 +530,7 @@ end
 ---@param GC table GameClients
 ---@param ttDb table Tooltip settings
 function LibsSocial:BuildBNetCombinedSection(tooltip, Friends, TT, GC, ttDb)
-	tooltip:AddSeparator(1, 0.3, 0.3, 0.3, 0.5)
+	tooltip:AddSeparator()
 	local collapsed = AddSectionHeader(
 		tooltip,
 		'Battle.net',
@@ -601,7 +614,7 @@ function LibsSocial:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 		accountID = info.accountID,
 		accountName = info.accountName or info.battleTag,
 		characterName = info.characterName,
-	})
+	}, 2)
 
 	-- Broadcast message
 	if ttDb.showBroadcasts and info.customMessage and info.customMessage ~= '' then
