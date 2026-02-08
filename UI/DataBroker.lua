@@ -30,6 +30,126 @@ local SECTION_COLORS = {
 local STATUS_ICON_AFK = '|TInterface\\FriendsFrame\\StatusIcon-Away:0|t'
 local STATUS_ICON_DND = '|TInterface\\FriendsFrame\\StatusIcon-DnD:0|t'
 
+-- Quick Actions hover frame (created once, repositioned per row)
+local actionFrame
+local actionHideTimer
+
+---Create or return the shared quick actions hover frame
+---@return Frame actionFrame
+local function GetActionFrame()
+	if actionFrame then
+		return actionFrame
+	end
+
+	actionFrame = CreateFrame('Frame', 'LibsSocialQuickActions', UIParent, 'BackdropTemplate')
+	actionFrame:SetFrameStrata('TOOLTIP')
+	actionFrame:SetFrameLevel(100)
+	actionFrame:SetSize(52, 24)
+	actionFrame:SetBackdrop({
+		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
+		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
+		edgeSize = 8,
+		insets = { left = 2, right = 2, top = 2, bottom = 2 },
+	})
+	actionFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
+	actionFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
+	actionFrame:Hide()
+
+	-- Whisper button
+	local whisperBtn = CreateFrame('Button', nil, actionFrame)
+	whisperBtn:SetSize(20, 20)
+	whisperBtn:SetPoint('LEFT', 4, 0)
+	whisperBtn:SetNormalTexture('Interface\\ChatFrame\\UI-ChatIcon-Chat-Up')
+	whisperBtn:SetHighlightTexture('Interface\\Buttons\\UI-Common-MouseHilight', 'ADD')
+	whisperBtn:SetScript('OnEnter', function()
+		if actionHideTimer then
+			actionHideTimer:Cancel()
+			actionHideTimer = nil
+		end
+		GameTooltip:SetOwner(whisperBtn, 'ANCHOR_TOP')
+		GameTooltip:AddLine('Whisper')
+		GameTooltip:Show()
+	end)
+	whisperBtn:SetScript('OnLeave', function()
+		GameTooltip:Hide()
+		actionHideTimer = C_Timer.NewTimer(0.3, function()
+			actionFrame:Hide()
+		end)
+	end)
+	actionFrame.whisperBtn = whisperBtn
+
+	-- Invite button
+	local inviteBtn = CreateFrame('Button', nil, actionFrame)
+	inviteBtn:SetSize(20, 20)
+	inviteBtn:SetPoint('LEFT', whisperBtn, 'RIGHT', 4, 0)
+	inviteBtn:SetNormalTexture('Interface\\FriendsFrame\\UI-FriendsFrame-Link')
+	inviteBtn:SetHighlightTexture('Interface\\Buttons\\UI-Common-MouseHilight', 'ADD')
+	inviteBtn:SetScript('OnEnter', function()
+		if actionHideTimer then
+			actionHideTimer:Cancel()
+			actionHideTimer = nil
+		end
+		GameTooltip:SetOwner(inviteBtn, 'ANCHOR_TOP')
+		GameTooltip:AddLine('Invite to Group')
+		GameTooltip:Show()
+	end)
+	inviteBtn:SetScript('OnLeave', function()
+		GameTooltip:Hide()
+		actionHideTimer = C_Timer.NewTimer(0.3, function()
+			actionFrame:Hide()
+		end)
+	end)
+	actionFrame.inviteBtn = inviteBtn
+
+	-- Keep visible while mouse is over the action frame itself
+	actionFrame:SetScript('OnEnter', function()
+		if actionHideTimer then
+			actionHideTimer:Cancel()
+			actionHideTimer = nil
+		end
+	end)
+	actionFrame:SetScript('OnLeave', function()
+		actionHideTimer = C_Timer.NewTimer(0.3, function()
+			actionFrame:Hide()
+		end)
+	end)
+
+	return actionFrame
+end
+
+---Show quick actions for a player, anchored to a cell
+---@param cell Frame The cell frame to anchor to
+---@param playerData table Player data
+local function ShowQuickActions(cell, playerData)
+	local af = GetActionFrame()
+
+	-- Position to the right of the row
+	af:ClearAllPoints()
+	af:SetPoint('LEFT', cell, 'RIGHT', 2, 0)
+
+	-- Configure whisper button
+	af.whisperBtn:SetScript('OnClick', function()
+		if playerData.accountID then
+			ChatFrame_SendSmartTell(playerData.accountName)
+		elseif playerData.name then
+			ChatFrame_SendTell(playerData.fullName or playerData.name)
+		end
+		af:Hide()
+	end)
+
+	-- Configure invite button
+	af.inviteBtn:SetScript('OnClick', function()
+		if playerData.accountID then
+			BNInviteFriend(playerData.accountID)
+		elseif playerData.name then
+			C_PartyInfo.InviteUnit(playerData.fullName or playerData.name)
+		end
+		af:Hide()
+	end)
+
+	af:Show()
+end
+
 -- Create the LibDataBroker object
 local socialLDB
 
@@ -316,6 +436,23 @@ local function SetupPlayerRow(row, playerData, numCols)
 		local cell = row:GetCell(i)
 		if cell then
 			cell:SetScript('OnMouseDown', handler)
+			-- Hover to show quick actions
+			cell:SetScript('OnEnter', function(frame)
+				if actionHideTimer then
+					actionHideTimer:Cancel()
+					actionHideTimer = nil
+				end
+				-- Use last cell for anchor positioning
+				local lastCell = row:GetCell(numCols) or frame
+				ShowQuickActions(lastCell, playerData)
+			end)
+			cell:SetScript('OnLeave', function()
+				actionHideTimer = C_Timer.NewTimer(0.3, function()
+					if actionFrame then
+						actionFrame:Hide()
+					end
+				end)
+			end)
 		end
 	end
 end
