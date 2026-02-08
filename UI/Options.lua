@@ -105,6 +105,41 @@ function LibsSocial:InitializeOptions()
 							self.db.profile.display.tooltip.extraWidth = value
 						end,
 					},
+					sortField = {
+						name = 'Sort Players By',
+						desc = 'How to sort players within each tooltip section',
+						type = 'select',
+						order = 3,
+						values = {
+							name = 'Name',
+							level = 'Level',
+							class = 'Class',
+							zone = 'Zone',
+							rank = 'Rank (Guild only)',
+						},
+						get = function()
+							return self.db.profile.display.tooltip.sortField
+						end,
+						set = function(_, value)
+							self.db.profile.display.tooltip.sortField = value
+						end,
+					},
+					sortDirection = {
+						name = 'Sort Direction',
+						desc = 'Ascending or descending sort order',
+						type = 'select',
+						order = 4,
+						values = {
+							asc = 'Ascending (A-Z, Low-High)',
+							desc = 'Descending (Z-A, High-Low)',
+						},
+						get = function()
+							return self.db.profile.display.tooltip.sortDirection
+						end,
+						set = function(_, value)
+							self.db.profile.display.tooltip.sortDirection = value
+						end,
+					},
 					sectionsHeader = {
 						name = 'Sections',
 						type = 'header',

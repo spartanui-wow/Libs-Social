@@ -235,6 +235,41 @@ local function GetGroupIndicator(name)
 	return ''
 end
 
+---Sort a list of player tables by the configured sort field and direction
+---@param players table[] Array of player data tables
+---@param sortField string Field name: 'name', 'level', 'class', 'zone', 'rank'
+---@param sortDirection string 'asc' or 'desc'
+local function SortPlayers(players, sortField, sortDirection)
+	local ascending = sortDirection ~= 'desc'
+
+	table.sort(players, function(a, b)
+		local valA, valB
+
+		if sortField == 'level' then
+			valA = a.level or a.characterLevel or 0
+			valB = b.level or b.characterLevel or 0
+		elseif sortField == 'class' then
+			valA = a.class or a.classFileName or a.className or ''
+			valB = b.class or b.classFileName or b.className or ''
+		elseif sortField == 'zone' then
+			valA = a.area or a.zone or a.areaName or ''
+			valB = b.area or b.zone or b.areaName or ''
+		elseif sortField == 'rank' then
+			valA = a.rankIndex or 99
+			valB = b.rankIndex or 99
+		else -- 'name' default
+			valA = (a.name or a.characterName or ''):lower()
+			valB = (b.name or b.characterName or ''):lower()
+		end
+
+		if ascending then
+			return valA < valB
+		else
+			return valA > valB
+		end
+	end)
+end
+
 ---Add a full-width line (spanning both columns) to the tooltip
 ---@param tooltip table LibQTip-2.0 tooltip
 ---@param text string Line text
@@ -384,39 +419,48 @@ function LibsSocial:BuildTooltipContent(tooltip)
 		)
 
 		if not collapsed then
+			-- Collect online friends into sortable array
+			local onlineFriends = {}
 			for name, info in pairs(Friends.characterFriends) do
 				if info.connected then
-					local groupIcon = GetGroupIndicator(name)
-					local coloredName = TT:ColorName(name, info.class)
-					local leftParts = { groupIcon .. coloredName }
+					info._sortName = name
+					table.insert(onlineFriends, info)
+				end
+			end
+			SortPlayers(onlineFriends, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
 
-					if ttDb.showLevels then
-						table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
-					end
+			for _, info in ipairs(onlineFriends) do
+				local name = info._sortName
+				local groupIcon = GetGroupIndicator(name)
+				local coloredName = TT:ColorName(name, info.class)
+				local leftParts = { groupIcon .. coloredName }
 
-					local status = FormatStatus(false, false, info.mobile)
-					if status ~= '' then
-						table.insert(leftParts, status)
-					end
+				if ttDb.showLevels then
+					table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
+				end
 
-					local leftStr = table.concat(leftParts)
-					local zone, zr, zg, zb = FormatZone(info.area)
-					local rightStr = ttDb.showZones and zone or nil
+				local status = FormatStatus(false, false, info.mobile)
+				if status ~= '' then
+					table.insert(leftParts, status)
+				end
 
-					local row = tooltip:AddRow(leftStr, rightStr)
-					if rightStr and rightStr ~= '' then
-						row:GetCell(2):SetTextColor(zr, zg, zb)
-					end
+				local leftStr = table.concat(leftParts)
+				local zone, zr, zg, zb = FormatZone(info.area)
+				local rightStr = ttDb.showZones and zone or nil
 
-					SetupPlayerRow(row, {
-						name = name,
-						fullName = name,
-					}, 2)
+				local row = tooltip:AddRow(leftStr, rightStr)
+				if rightStr and rightStr ~= '' then
+					row:GetCell(2):SetTextColor(zr, zg, zb)
+				end
 
-					-- Notes
-					if ttDb.showNotes and info.notes and info.notes ~= '' then
-						AddFullLine(tooltip, '   |cffaaaaaa' .. info.notes .. '|r')
-					end
+				SetupPlayerRow(row, {
+					name = name,
+					fullName = name,
+				}, 2)
+
+				-- Notes
+				if ttDb.showNotes and info.notes and info.notes ~= '' then
+					AddFullLine(tooltip, '   |cffaaaaaa' .. info.notes .. '|r')
 				end
 			end
 		end
@@ -436,16 +480,14 @@ function LibsSocial:BuildTooltipContent(tooltip)
 		)
 
 		if not collapsed then
-			-- Sort guild members by rank index
+			-- Collect online guild members and sort
 			local onlineGuild = {}
 			for _, info in pairs(Friends.guildMembers) do
 				if info.online then
 					table.insert(onlineGuild, info)
 				end
 			end
-			table.sort(onlineGuild, function(a, b)
-				return (a.rankIndex or 99) < (b.rankIndex or 99)
-			end)
+			SortPlayers(onlineGuild, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
 
 			for _, info in ipairs(onlineGuild) do
 				local groupIcon = GetGroupIndicator(info.fullName or info.name)
