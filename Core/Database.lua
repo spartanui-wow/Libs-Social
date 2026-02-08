@@ -5,7 +5,7 @@ local defaults = {
 	profile = {
 		-- Blocking settings
 		blocking = {
-			enabled = true,
+			enabled = false,
 			duels = true,
 			petDuels = true,
 			partyInvites = false,
@@ -14,7 +14,7 @@ local defaults = {
 		},
 		-- Auto-accept settings
 		autoAccept = {
-			enabled = true,
+			enabled = false,
 			partyFromFriends = true,
 			syncFromFriends = true,
 			queueFromFriends = false,
