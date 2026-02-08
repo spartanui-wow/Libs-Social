@@ -241,7 +241,16 @@ end
 ---@param numCols number Number of columns in the tooltip
 local function SetupPlayerRow(row, playerData, numCols)
 	local handler = function(frame, button)
-		if button == 'RightButton' and LibsSocial.PlayerMenu then
+		if button == 'LeftButton' then
+			-- Click-to-whisper
+			if playerData.accountID then
+				-- BNet friend: use smart tell with account name
+				ChatFrame_SendSmartTell(playerData.accountName)
+			elseif playerData.name then
+				-- Character friend or guild member
+				ChatFrame_SendTell(playerData.fullName or playerData.name)
+			end
+		elseif button == 'RightButton' and LibsSocial.PlayerMenu then
 			if playerData.accountID then
 				LibsSocial.PlayerMenu:ShowForBNet(playerData.accountName, playerData.accountID, playerData.characterName, frame)
 			elseif playerData.name then
@@ -470,8 +479,8 @@ function LibsSocial:BuildTooltipContent(tooltip)
 
 	-- Click hints
 	tooltip:AddSeparator()
-	AddFullLine(tooltip, '|cffffff00Left Click:|r Friends  |cffffff00Right:|r Cycle Format', 0.5, 0.5, 0.5)
-	AddFullLine(tooltip, '|cffffff00Shift+Left:|r Options  |cffffff00Middle:|r Guild  |cffffff00Right-click player:|r Menu', 0.5, 0.5, 0.5)
+	AddFullLine(tooltip, '|cffffff00Left Click:|r Friends  |cffffff00Right:|r Cycle Format  |cffffff00Middle:|r Guild', 0.5, 0.5, 0.5)
+	AddFullLine(tooltip, '|cffffff00Shift+Left:|r Options  |cffffff00Left-click player:|r Whisper  |cffffff00Right-click player:|r Menu', 0.5, 0.5, 0.5)
 
 	-- Apply extra width if configured
 	local extraWidth = db.display.tooltip.extraWidth or 0
