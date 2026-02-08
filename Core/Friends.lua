@@ -258,3 +258,24 @@ end
 function Friends:GetTotalCount()
 	return self.numCharacterFriends + self.numBattleNetFriends + self.numGuildMembers
 end
+
+---Get game client counts for online BNet friends (deduplicated by accountID)
+---@return table<string, number> counts Keyed by display tag (e.g., "WoW", "D4", "OW"), values are counts
+function Friends:GetGameCounts()
+	local GC = LibsSocial.GameClients
+	local counts = {}
+	local seen = {}
+
+	for _, info in pairs(self.battleNetFriends) do
+		if info.isOnline and info.accountID and not seen[info.accountID] then
+			seen[info.accountID] = true
+			local client = info.clientProgram
+			if client and client ~= '' then
+				local tag = GC.GetClientDisplayName(client)
+				counts[tag] = (counts[tag] or 0) + 1
+			end
+		end
+	end
+
+	return counts
+end

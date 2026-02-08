@@ -534,6 +534,23 @@ function LibsSocial:BuildTooltipContent(tooltip)
 	local titleRow = tooltip:AddHeadingRow("Lib's Social")
 	titleRow:GetCell(1):SetColSpan(2)
 
+	-- "Who's Playing What" summary line
+	local gameCounts = Friends:GetGameCounts()
+	local sortedGames = {}
+	for tag, count in pairs(gameCounts) do
+		table.insert(sortedGames, { tag = tag, count = count })
+	end
+	table.sort(sortedGames, function(a, b)
+		return a.count > b.count
+	end)
+	if #sortedGames > 0 then
+		local parts = {}
+		for _, entry in ipairs(sortedGames) do
+			table.insert(parts, entry.tag .. ': ' .. entry.count)
+		end
+		AddFullLine(tooltip, table.concat(parts, '  |  '), 0.6, 0.6, 0.6)
+	end
+
 	-- Battle.net Friends
 	if Friends.numBattleNetFriends > 0 then
 		if ttDb.separateBNetSections then
