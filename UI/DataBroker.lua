@@ -551,6 +551,12 @@ function LibsSocial:BuildTooltipContent(tooltip)
 		AddFullLine(tooltip, table.concat(parts, '  |  '), 0.6, 0.6, 0.6)
 	end
 
+	if ttDb.groupMode == 'activity' then
+		-- Activity-based grouping: organize all players by what they're doing
+		self:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
+	else
+		-- Default grouping: BNet / Friends / Guild sections
+
 	-- Battle.net Friends
 	if Friends.numBattleNetFriends > 0 then
 		if ttDb.separateBNetSections then
@@ -686,6 +692,8 @@ function LibsSocial:BuildTooltipContent(tooltip)
 		end
 	end
 
+	end -- end of default groupMode else block
+
 	-- Status info
 	tooltip:AddSeparator()
 	local blockStatus = db.blocking.enabled and '|cff00ff00On|r' or '|cffff0000Off|r'
@@ -702,6 +710,200 @@ function LibsSocial:BuildTooltipContent(tooltip)
 	if extraWidth > 0 then
 		-- Set min width on title cell to force tooltip wider
 		titleRow:GetCell(1):SetMinWidth(300 + extraWidth)
+	end
+end
+
+---Build activity-grouped content: classifies all online players into activity buckets
+---Buckets: In My Group → In My Zone → Available → Busy/AFK → Other Games
+---@param tooltip table LibQTip-2.0 tooltip
+---@param Friends table Friends data
+---@param TT table Tooltip helpers
+---@param GC table GameClients
+---@param ttDb table Tooltip settings
+function LibsSocial:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
+	-- Classification buckets
+	local buckets = {
+		{ key = 'inGroup', name = 'In My Group', color = { r = 0, g = 1, b = 0 }, players = {} },
+		{ key = 'inZone', name = 'In My Zone', color = { r = 0, g = 0.8, b = 1 }, players = {} },
+		{ key = 'available', name = 'Available', color = { r = 1, g = 1, b = 1 }, players = {} },
+		{ key = 'busy', name = 'Busy / AFK', color = { r = 1, g = 0.5, b = 0 }, players = {} },
+		{ key = 'otherGames', name = 'Other Games', color = { r = 0.6, g = 0.6, b = 0.6 }, players = {} },
+	}
+
+	local playerZone = Friends.playerZone
+
+	---Classify a single player into a bucket
+	---@param playerInfo table Normalized player info
+	local function ClassifyPlayer(playerInfo)
+		-- Non-WoW BNet friend (not app)
+		if playerInfo.clientProgram and playerInfo.clientProgram ~= 'WoW' and not GC.IsAppClient(playerInfo.clientProgram) then
+			table.insert(buckets[5].players, playerInfo)
+			return
+		end
+
+		-- Skip app-only clients
+		if playerInfo.clientProgram and GC.IsAppClient(playerInfo.clientProgram) then
+			return
+		end
+
+		-- Check if in player's group
+		local checkName = playerInfo.fullName or playerInfo.name or ''
+		local shortName = checkName ~= '' and Ambiguate(checkName, 'none') or ''
+		if shortName ~= '' and (UnitInParty(shortName) or UnitInRaid(shortName)) then
+			table.insert(buckets[1].players, playerInfo)
+			return
+		end
+
+		-- Check same zone
+		local zone = playerInfo.area or playerInfo.zone or playerInfo.areaName or ''
+		if playerZone ~= '' and zone == playerZone then
+			table.insert(buckets[2].players, playerInfo)
+			return
+		end
+
+		-- Check AFK/DND
+		if playerInfo.isAFK or playerInfo.isDND or playerInfo.isBnetAFK or playerInfo.isBnetDND or playerInfo.isGameAFK or playerInfo.isGameBusy or playerInfo.status == 1 or playerInfo.status == 2 then
+			table.insert(buckets[4].players, playerInfo)
+			return
+		end
+
+		-- Available
+		table.insert(buckets[3].players, playerInfo)
+	end
+
+	-- Classify character friends
+	for name, info in pairs(Friends.characterFriends) do
+		if info.connected then
+			ClassifyPlayer({
+				name = name,
+				fullName = name,
+				level = info.level,
+				class = info.class,
+				area = info.area,
+				isAFK = false,
+				isDND = false,
+				mobile = info.mobile,
+				source = 'friend',
+			})
+		end
+	end
+
+	-- Classify BNet friends (deduplicated by accountID)
+	local seenAccounts = {}
+	for _, info in pairs(Friends.battleNetFriends) do
+		if info.isOnline and info.accountID and not seenAccounts[info.accountID] then
+			seenAccounts[info.accountID] = true
+			ClassifyPlayer({
+				name = info.characterName,
+				fullName = info.characterName,
+				accountID = info.accountID,
+				accountName = info.accountName or info.battleTag,
+				battleTag = info.battleTag,
+				characterName = info.characterName,
+				level = info.characterLevel,
+				className = info.className,
+				areaName = info.areaName,
+				clientProgram = info.clientProgram,
+				isBnetAFK = info.isBnetAFK,
+				isBnetDND = info.isDND,
+				isGameAFK = info.isGameAFK,
+				isGameBusy = info.isGameBusy,
+				wowProjectID = info.wowProjectID,
+				source = 'bnet',
+			})
+		end
+	end
+
+	-- Classify guild members
+	for _, info in pairs(Friends.guildMembers) do
+		if info.online then
+			ClassifyPlayer({
+				name = info.name,
+				fullName = info.fullName,
+				level = info.level,
+				class = info.class,
+				classFileName = info.classFileName,
+				zone = info.zone,
+				rank = info.rank,
+				rankIndex = info.rankIndex,
+				status = info.status,
+				mobile = info.mobile,
+				source = 'guild',
+			})
+		end
+	end
+
+	-- Render each non-empty bucket
+	for _, bucket in ipairs(buckets) do
+		if #bucket.players > 0 then
+			SortPlayers(bucket.players, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
+
+			tooltip:AddSeparator()
+			local collapsed = AddSectionHeader(
+				tooltip,
+				bucket.name,
+				string.format('|cff%s%d|r', COLORS.online, #bucket.players),
+				'activity_' .. bucket.key,
+				bucket.color
+			)
+
+			if not collapsed then
+				for _, p in ipairs(bucket.players) do
+					-- Build name display
+					local leftParts = {}
+
+					if p.accountID then
+						-- BNet friend: show account tag + character name
+						local accountTag = (p.battleTag or p.accountName or 'Unknown'):gsub('#%d+$', '')
+						table.insert(leftParts, string.format('|cff%s%s|r', COLORS.realid, accountTag))
+						if p.characterName then
+							local charName = TT:ColorName(p.characterName, p.className)
+							table.insert(leftParts, '  ' .. charName)
+						end
+						if p.clientProgram and p.clientProgram ~= 'WoW' and not GC.IsAppClient(p.clientProgram) then
+							local clientTag = GC.GetClientDisplayName(p.clientProgram)
+							table.insert(leftParts, string.format(' |cffaaaaaa[%s]|r', clientTag))
+						end
+					else
+						-- Character friend or guild member
+						local displayClass = p.classFileName or p.class
+						local coloredName = TT:ColorName(p.name or '?', displayClass)
+						table.insert(leftParts, coloredName)
+					end
+
+					if ttDb.showLevels then
+						local level = p.level or 0
+						if level > 0 then
+							table.insert(leftParts, ' (' .. TT:ColorLevel(level) .. ')')
+						end
+					end
+
+					local leftStr = table.concat(leftParts)
+
+					-- Zone (right side)
+					local zone = p.area or p.zone or p.areaName or ''
+					local rightStr = nil
+					local zr, zg, zb = 0.7, 0.7, 0.7
+					if ttDb.showZones and zone ~= '' then
+						rightStr, zr, zg, zb = FormatZone(zone)
+					end
+
+					local row = tooltip:AddRow(leftStr, rightStr)
+					if rightStr and rightStr ~= '' then
+						row:GetCell(2):SetTextColor(zr, zg, zb)
+					end
+
+					-- Setup player row interactions
+					SetupPlayerRow(row, {
+						accountID = p.accountID,
+						accountName = p.accountName,
+						characterName = p.characterName,
+						name = p.name,
+						fullName = p.fullName,
+					}, 2)
+				end
+			end
+		end
 	end
 end
 

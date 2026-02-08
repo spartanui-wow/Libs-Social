@@ -38,6 +38,7 @@ local defaults = {
 				extraWidth = 0, -- 0-200 additional pixel width
 				sortField = 'name', -- 'name', 'level', 'class', 'zone', 'rank'
 				sortDirection = 'asc', -- 'asc', 'desc'
+				groupMode = 'default', -- 'default', 'activity'
 				showLevels = true,
 				showNotes = true,
 				showOfficerNotes = false,
@@ -55,6 +56,11 @@ local defaults = {
 				battleNetApp = false,
 				characterFriends = false,
 				guild = false,
+				activity_inGroup = false,
+				activity_inZone = false,
+				activity_available = false,
+				activity_busy = false,
+				activity_otherGames = false,
 			},
 		},
 		-- Minimap button

@@ -145,6 +145,22 @@ function LibsSocial:InitializeOptions()
 						type = 'header',
 						order = 10,
 					},
+					groupMode = {
+						name = 'Group Mode',
+						desc = 'How to organize players in the tooltip',
+						type = 'select',
+						order = 10.5,
+						values = {
+							default = 'Default (BNet / Friends / Guild)',
+							activity = 'Activity (Group / Zone / Status)',
+						},
+						get = function()
+							return self.db.profile.display.tooltip.groupMode
+						end,
+						set = function(_, value)
+							self.db.profile.display.tooltip.groupMode = value
+						end,
+					},
 					separateBNetSections = {
 						name = 'Separate BNet Sections',
 						desc = 'Split Battle.net friends into "In Game" and "App" sections',
