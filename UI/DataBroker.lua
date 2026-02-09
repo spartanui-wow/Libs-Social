@@ -455,6 +455,9 @@ local function ShowPlayerInfoTooltip(frame, playerData)
 	end
 
 	GameTooltip:SetOwner(frame, 'ANCHOR_CURSOR')
+	-- Raise frame level so GameTooltip renders above the LibQTip tooltip (both use TOOLTIP strata)
+	GameTooltip:SetFrameStrata('TOOLTIP')
+	GameTooltip:Raise()
 	GameTooltip:AddLine(playerData.name or playerData.accountName or 'Unknown', 1, 1, 1)
 	for _, line in ipairs(lines) do
 		GameTooltip:AddDoubleLine(line.label, line.value, 0.5, 0.5, 0.5, 1, 1, 1)
@@ -506,16 +509,17 @@ local function SetupPlayerRow(row, playerData, numCols)
 	end
 
 	-- Set script on each cell so clicks are captured regardless of which column is clicked
+	-- Use OnMouseUp (not OnMouseDown) — this is the proven pattern for LibQTip-2.0 interactions
 	for i = 1, numCols do
 		local cell = row:GetCell(i)
 		if cell then
-			cell:SetScript('OnMouseDown', handler)
+			cell:SetScript('OnMouseUp', handler)
 			-- Verify the script was actually set and mouse is enabled
-			local hasScript = cell:GetScript('OnMouseDown')
+			local hasScript = cell:GetScript('OnMouseUp')
 			LibsSocial:Log(
 				'Cell '
 					.. i
-					.. ' OnMouseDown set='
+					.. ' OnMouseUp set='
 					.. tostring(hasScript ~= nil)
 					.. ' EnableMouse='
 					.. tostring(cell:IsMouseEnabled())

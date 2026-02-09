@@ -50,11 +50,11 @@ local FrameScriptHandler = {
 
         ScriptManager:CallScriptHandler(frame, "OnLeave", ...)
     end,
-    OnMouseDown = function(frame, ...)
-        ScriptManager:CallScriptHandler(frame, "OnMouseDown", ...)
+    OnMouseDown = function(frame, button, ...)
+        ScriptManager:CallScriptHandler(frame, "OnMouseDown", button, ...)
     end,
-    OnMouseUp = function(frame, ...)
-        ScriptManager:CallScriptHandler(frame, "OnMouseUp", ...)
+    OnMouseUp = function(frame, button, ...)
+        ScriptManager:CallScriptHandler(frame, "OnMouseUp", button, ...)
     end,
     OnReceiveDrag = function(frame, ...)
         ScriptManager:CallScriptHandler(frame, "OnReceiveDrag", ...)
