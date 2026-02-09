@@ -71,7 +71,12 @@ function ScriptManager:CallScriptHandler(frame, scriptType, ...)
     local scriptMetadata = ScriptManager.FrameScriptMetadata[frame][scriptType]
 
     if scriptMetadata then
-        scriptMetadata.Handler(frame, unpack(scriptMetadata.Parameters), ...)
+        local params = scriptMetadata.Parameters
+        if params and #params > 0 then
+            scriptMetadata.Handler(frame, unpack(params), ...)
+        else
+            scriptMetadata.Handler(frame, ...)
+        end
     end
 end
 
