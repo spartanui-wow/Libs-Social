@@ -349,7 +349,7 @@ local function GetGroupIndicator(name)
 	-- Try both the raw name and the ambiguated version
 	local short = Ambiguate(name, 'none')
 	if UnitInParty(short) or UnitInRaid(short) or UnitInParty(name) or UnitInRaid(name) then
-		return '|cff00ff00\226\156\147|r '  -- Green checkmark ✓
+		return '|cff00ff00\226\156\147|r ' -- Green checkmark ✓
 	end
 
 	return ''
@@ -406,6 +406,62 @@ local function AddFullLine(tooltip, text, r, g, b)
 	return row
 end
 
+---Show a GameTooltip with player details (realm, class, level) on row hover
+---@param frame Frame The cell frame to anchor the tooltip to
+---@param playerData table Player data containing realm, class, level, etc.
+local function ShowPlayerInfoTooltip(frame, playerData)
+	local lines = {}
+
+	-- Realm (most important for distinguishing same-name characters)
+	if playerData.realm and playerData.realm ~= '' then
+		table.insert(lines, { label = 'Realm', value = playerData.realm })
+	elseif playerData.fullName and playerData.fullName:find('-') then
+		-- Extract realm from fullName like "Name-Realm"
+		local realm = playerData.fullName:match('-(.+)$')
+		if realm then
+			table.insert(lines, { label = 'Realm', value = realm })
+		end
+	end
+
+	-- Class
+	if playerData.class and playerData.class ~= '' then
+		local className = playerData.class
+		local color = RAID_CLASS_COLORS[className:upper()]
+		if color then
+			table.insert(lines, { label = 'Class', value = string.format('|cff%02x%02x%02x%s|r', color.r * 255, color.g * 255, color.b * 255, className) })
+		else
+			table.insert(lines, { label = 'Class', value = className })
+		end
+	end
+
+	-- Level
+	if playerData.level and playerData.level > 0 then
+		table.insert(lines, { label = 'Level', value = tostring(playerData.level) })
+	end
+
+	-- Rank (guild)
+	if playerData.rank and playerData.rank ~= '' then
+		table.insert(lines, { label = 'Rank', value = playerData.rank })
+	end
+
+	-- BattleTag
+	if playerData.battleTag and playerData.battleTag ~= '' then
+		table.insert(lines, { label = 'BattleTag', value = playerData.battleTag })
+	end
+
+	-- Only show if we have something useful
+	if #lines == 0 then
+		return
+	end
+
+	GameTooltip:SetOwner(frame, 'ANCHOR_CURSOR')
+	GameTooltip:AddLine(playerData.name or playerData.accountName or 'Unknown', 1, 1, 1)
+	for _, line in ipairs(lines) do
+		GameTooltip:AddDoubleLine(line.label, line.value, 0.5, 0.5, 0.5, 1, 1, 1)
+	end
+	GameTooltip:Show()
+end
+
 ---Set up a player row with right-click context menu and hover highlight
 ---Scripts must be set on cells (not rows) because cells have higher frame level and intercept mouse events.
 ---@param row table LibQTip-2.0 row
@@ -413,20 +469,38 @@ end
 ---@param numCols number Number of columns in the tooltip
 local function SetupPlayerRow(row, playerData, numCols)
 	local handler = function(frame, button)
+		LibsSocial:Log(
+			'Row clicked: button='
+				.. tostring(button)
+				.. ' name='
+				.. tostring(playerData.name)
+				.. ' accountName='
+				.. tostring(playerData.accountName)
+				.. ' accountID='
+				.. tostring(playerData.accountID),
+			'debug'
+		)
 		if button == 'LeftButton' then
 			-- Click-to-whisper
 			if playerData.accountID then
 				-- BNet friend: use smart tell with account name
+				LibsSocial:Log('Whisper BNet: ' .. tostring(playerData.accountName), 'debug')
 				ChatFrame_SendSmartTell(playerData.accountName)
 			elseif playerData.name then
 				-- Character friend or guild member
+				LibsSocial:Log('Whisper Character: ' .. tostring(playerData.fullName or playerData.name), 'debug')
 				ChatFrame_SendTell(playerData.fullName or playerData.name)
+			else
+				LibsSocial:Log('Left-click but no accountID or name in playerData', 'warning')
 			end
-		elseif button == 'RightButton' and LibsSocial.PlayerMenu then
-			if playerData.accountID then
-				LibsSocial.PlayerMenu:ShowForBNet(playerData.accountName, playerData.accountID, playerData.characterName, frame)
-			elseif playerData.name then
-				LibsSocial.PlayerMenu:ShowForCharacter(playerData.fullName or playerData.name, frame)
+		elseif button == 'RightButton' then
+			LibsSocial:Log('Right-click: PlayerMenu exists=' .. tostring(LibsSocial.PlayerMenu ~= nil), 'debug')
+			if LibsSocial.PlayerMenu then
+				if playerData.accountID then
+					LibsSocial.PlayerMenu:ShowForBNet(playerData.accountName, playerData.accountID, playerData.characterName, frame)
+				elseif playerData.name then
+					LibsSocial.PlayerMenu:ShowForCharacter(playerData.fullName or playerData.name, frame)
+				end
 			end
 		end
 	end
@@ -436,7 +510,22 @@ local function SetupPlayerRow(row, playerData, numCols)
 		local cell = row:GetCell(i)
 		if cell then
 			cell:SetScript('OnMouseDown', handler)
-			-- Hover to show quick actions
+			-- Verify the script was actually set and mouse is enabled
+			local hasScript = cell:GetScript('OnMouseDown')
+			LibsSocial:Log(
+				'Cell '
+					.. i
+					.. ' OnMouseDown set='
+					.. tostring(hasScript ~= nil)
+					.. ' EnableMouse='
+					.. tostring(cell:IsMouseEnabled())
+					.. ' visible='
+					.. tostring(cell:IsVisible())
+					.. ' name='
+					.. tostring(playerData.name or playerData.accountName),
+				'debug'
+			)
+			-- Hover to show quick actions + info tooltip
 			cell:SetScript('OnEnter', function(frame)
 				if actionHideTimer then
 					actionHideTimer:Cancel()
@@ -445,14 +534,19 @@ local function SetupPlayerRow(row, playerData, numCols)
 				-- Use last cell for anchor positioning
 				local lastCell = row:GetCell(numCols) or frame
 				ShowQuickActions(lastCell, playerData)
+				-- Show player info tooltip (realm, class, level)
+				ShowPlayerInfoTooltip(frame, playerData)
 			end)
 			cell:SetScript('OnLeave', function()
+				GameTooltip:Hide()
 				actionHideTimer = C_Timer.NewTimer(0.3, function()
 					if actionFrame then
 						actionFrame:Hide()
 					end
 				end)
 			end)
+		else
+			LibsSocial:Log('SetupPlayerRow: cell ' .. i .. ' is nil for row', 'warning')
 		end
 	end
 end
@@ -557,141 +651,145 @@ function LibsSocial:BuildTooltipContent(tooltip)
 	else
 		-- Default grouping: BNet / Friends / Guild sections
 
-	-- Battle.net Friends
-	if Friends.numBattleNetFriends > 0 then
-		if ttDb.separateBNetSections then
-			self:BuildBNetInGameSection(tooltip, Friends, TT, GC, ttDb)
-			self:BuildBNetAppSection(tooltip, Friends, TT, GC, ttDb)
-		else
-			self:BuildBNetCombinedSection(tooltip, Friends, TT, GC, ttDb)
-		end
-	end
-
-	-- Character Friends Section
-	if Friends.numCharacterFriends > 0 then
-		tooltip:AddSeparator()
-		local collapsed = AddSectionHeader(
-			tooltip,
-			'Friends',
-			string.format('|cff%s%d online|r', Friends.numCharacterOnline > 0 and COLORS.online or COLORS.offline, Friends.numCharacterOnline),
-			'characterFriends',
-			SECTION_COLORS.friends
-		)
-
-		if not collapsed then
-			-- Collect online friends into sortable array
-			local onlineFriends = {}
-			for name, info in pairs(Friends.characterFriends) do
-				if info.connected then
-					info._sortName = name
-					table.insert(onlineFriends, info)
-				end
-			end
-			SortPlayers(onlineFriends, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
-
-			for _, info in ipairs(onlineFriends) do
-				local name = info._sortName
-				local groupIcon = GetGroupIndicator(name)
-				local coloredName = TT:ColorName(name, info.class)
-				local leftParts = { groupIcon .. coloredName }
-
-				if ttDb.showLevels then
-					table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
-				end
-
-				local status = FormatStatus(false, false, info.mobile)
-				if status ~= '' then
-					table.insert(leftParts, status)
-				end
-
-				local leftStr = table.concat(leftParts)
-				local zone, zr, zg, zb = FormatZone(info.area)
-				local rightStr = ttDb.showZones and zone or nil
-
-				local row = tooltip:AddRow(leftStr, rightStr)
-				if rightStr and rightStr ~= '' then
-					row:GetCell(2):SetTextColor(zr, zg, zb)
-				end
-
-				SetupPlayerRow(row, {
-					name = name,
-					fullName = name,
-				}, 2)
-
-				-- Notes
-				if ttDb.showNotes and info.notes and info.notes ~= '' then
-					AddFullLine(tooltip, '   |cffaaaaaa' .. info.notes .. '|r')
-				end
+		-- Battle.net Friends
+		if Friends.numBattleNetFriends > 0 then
+			if ttDb.separateBNetSections then
+				self:BuildBNetInGameSection(tooltip, Friends, TT, GC, ttDb)
+				self:BuildBNetAppSection(tooltip, Friends, TT, GC, ttDb)
+			else
+				self:BuildBNetCombinedSection(tooltip, Friends, TT, GC, ttDb)
 			end
 		end
-	end
 
-	-- Guild Section
-	if IsInGuild() then
-		local guildName = GetGuildInfo('player')
+		-- Character Friends Section
+		if Friends.numCharacterFriends > 0 then
+			tooltip:AddSeparator()
+			local collapsed = AddSectionHeader(
+				tooltip,
+				'Friends',
+				string.format('|cff%s%d online|r', Friends.numCharacterOnline > 0 and COLORS.online or COLORS.offline, Friends.numCharacterOnline),
+				'characterFriends',
+				SECTION_COLORS.friends
+			)
 
-		tooltip:AddSeparator()
-		local collapsed = AddSectionHeader(
-			tooltip,
-			'Guild: ' .. (guildName or ''),
-			string.format('|cff%s%d online|r', Friends.numGuildOnline > 0 and COLORS.online or COLORS.offline, Friends.numGuildOnline),
-			'guild',
-			SECTION_COLORS.guild
-		)
-
-		if not collapsed then
-			-- Collect online guild members and sort
-			local onlineGuild = {}
-			for _, info in pairs(Friends.guildMembers) do
-				if info.online then
-					table.insert(onlineGuild, info)
+			if not collapsed then
+				-- Collect online friends into sortable array
+				local onlineFriends = {}
+				for name, info in pairs(Friends.characterFriends) do
+					if info.connected then
+						info._sortName = name
+						table.insert(onlineFriends, info)
+					end
 				end
-			end
-			SortPlayers(onlineGuild, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
+				SortPlayers(onlineFriends, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
 
-			for _, info in ipairs(onlineGuild) do
-				local groupIcon = GetGroupIndicator(info.fullName or info.name)
-				local coloredName = TT:ColorName(info.name, info.classFileName)
-				local leftParts = { groupIcon .. coloredName }
+				for _, info in ipairs(onlineFriends) do
+					local name = info._sortName
+					local groupIcon = GetGroupIndicator(name)
+					local coloredName = TT:ColorName(name, info.class)
+					local leftParts = { groupIcon .. coloredName }
 
-				if ttDb.showLevels then
-					table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
-				end
+					if ttDb.showLevels then
+						table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
+					end
 
-				if ttDb.showRank and info.rank then
-					table.insert(leftParts, ' |cffaaaaaa' .. info.rank .. '|r')
-				end
+					local status = FormatStatus(false, false, info.mobile)
+					if status ~= '' then
+						table.insert(leftParts, status)
+					end
 
-				local status = FormatStatus(info.status == 1, info.status == 2, info.mobile)
-				if status ~= '' then
-					table.insert(leftParts, status)
-				end
+					local leftStr = table.concat(leftParts)
+					local zone, zr, zg, zb = FormatZone(info.area)
+					local rightStr = ttDb.showZones and zone or nil
 
-				local leftStr = table.concat(leftParts)
-				local zone, zr, zg, zb = FormatZone(info.zone)
-				local rightStr = ttDb.showZones and zone or nil
+					local row = tooltip:AddRow(leftStr, rightStr)
+					if rightStr and rightStr ~= '' then
+						row:GetCell(2):SetTextColor(zr, zg, zb)
+					end
 
-				local row = tooltip:AddRow(leftStr, rightStr)
-				if rightStr and rightStr ~= '' then
-					row:GetCell(2):SetTextColor(zr, zg, zb)
-				end
+					SetupPlayerRow(row, {
+						name = name,
+						fullName = name,
+						class = info.class,
+						level = info.level,
+					}, 2)
 
-				SetupPlayerRow(row, {
-					name = info.name,
-					fullName = info.fullName,
-				}, 2)
-
-				-- Notes
-				if ttDb.showNotes and info.note and info.note ~= '' then
-					AddFullLine(tooltip, '   |cffaaaaaa' .. info.note .. '|r')
-				end
-				if ttDb.showOfficerNotes and info.officernote and info.officernote ~= '' then
-					AddFullLine(tooltip, '   |cffff8800[O] ' .. info.officernote .. '|r')
+					-- Notes
+					if ttDb.showNotes and info.notes and info.notes ~= '' then
+						AddFullLine(tooltip, '   |cffaaaaaa' .. info.notes .. '|r')
+					end
 				end
 			end
 		end
-	end
 
+		-- Guild Section
+		if IsInGuild() then
+			local guildName = GetGuildInfo('player')
+
+			tooltip:AddSeparator()
+			local collapsed = AddSectionHeader(
+				tooltip,
+				'Guild: ' .. (guildName or ''),
+				string.format('|cff%s%d online|r', Friends.numGuildOnline > 0 and COLORS.online or COLORS.offline, Friends.numGuildOnline),
+				'guild',
+				SECTION_COLORS.guild
+			)
+
+			if not collapsed then
+				-- Collect online guild members and sort
+				local onlineGuild = {}
+				for _, info in pairs(Friends.guildMembers) do
+					if info.online then
+						table.insert(onlineGuild, info)
+					end
+				end
+				SortPlayers(onlineGuild, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
+
+				for _, info in ipairs(onlineGuild) do
+					local groupIcon = GetGroupIndicator(info.fullName or info.name)
+					local coloredName = TT:ColorName(info.name, info.classFileName)
+					local leftParts = { groupIcon .. coloredName }
+
+					if ttDb.showLevels then
+						table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
+					end
+
+					if ttDb.showRank and info.rank then
+						table.insert(leftParts, ' |cffaaaaaa' .. info.rank .. '|r')
+					end
+
+					local status = FormatStatus(info.status == 1, info.status == 2, info.mobile)
+					if status ~= '' then
+						table.insert(leftParts, status)
+					end
+
+					local leftStr = table.concat(leftParts)
+					local zone, zr, zg, zb = FormatZone(info.zone)
+					local rightStr = ttDb.showZones and zone or nil
+
+					local row = tooltip:AddRow(leftStr, rightStr)
+					if rightStr and rightStr ~= '' then
+						row:GetCell(2):SetTextColor(zr, zg, zb)
+					end
+
+					SetupPlayerRow(row, {
+						name = info.name,
+						fullName = info.fullName,
+						class = info.classFileName or info.class,
+						level = info.level,
+						rank = info.rank,
+					}, 2)
+
+					-- Notes
+					if ttDb.showNotes and info.note and info.note ~= '' then
+						AddFullLine(tooltip, '   |cffaaaaaa' .. info.note .. '|r')
+					end
+					if ttDb.showOfficerNotes and info.officernote and info.officernote ~= '' then
+						AddFullLine(tooltip, '   |cffff8800[O] ' .. info.officernote .. '|r')
+					end
+				end
+			end
+		end
 	end -- end of default groupMode else block
 
 	-- Status info
@@ -762,7 +860,16 @@ function LibsSocial:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
 		end
 
 		-- Check AFK/DND
-		if playerInfo.isAFK or playerInfo.isDND or playerInfo.isBnetAFK or playerInfo.isBnetDND or playerInfo.isGameAFK or playerInfo.isGameBusy or playerInfo.status == 1 or playerInfo.status == 2 then
+		if
+			playerInfo.isAFK
+			or playerInfo.isDND
+			or playerInfo.isBnetAFK
+			or playerInfo.isBnetDND
+			or playerInfo.isGameAFK
+			or playerInfo.isGameBusy
+			or playerInfo.status == 1
+			or playerInfo.status == 2
+		then
 			table.insert(buckets[4].players, playerInfo)
 			return
 		end
@@ -800,6 +907,7 @@ function LibsSocial:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
 				accountName = info.accountName or info.battleTag,
 				battleTag = info.battleTag,
 				characterName = info.characterName,
+				realmName = info.realmName,
 				level = info.characterLevel,
 				className = info.className,
 				areaName = info.areaName,
@@ -839,13 +947,7 @@ function LibsSocial:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
 			SortPlayers(bucket.players, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
 
 			tooltip:AddSeparator()
-			local collapsed = AddSectionHeader(
-				tooltip,
-				bucket.name,
-				string.format('|cff%s%d|r', COLORS.online, #bucket.players),
-				'activity_' .. bucket.key,
-				bucket.color
-			)
+			local collapsed = AddSectionHeader(tooltip, bucket.name, string.format('|cff%s%d|r', COLORS.online, #bucket.players), 'activity_' .. bucket.key, bucket.color)
 
 			if not collapsed then
 				for _, p in ipairs(bucket.players) do
@@ -900,6 +1002,11 @@ function LibsSocial:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
 						characterName = p.characterName,
 						name = p.name,
 						fullName = p.fullName,
+						realm = p.realmName,
+						class = p.classFileName or p.className or p.class,
+						level = p.level,
+						rank = p.rank,
+						battleTag = p.battleTag,
 					}, 2)
 				end
 			end
@@ -1041,6 +1148,10 @@ function LibsSocial:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 		accountID = info.accountID,
 		accountName = info.accountName or info.battleTag,
 		characterName = info.characterName,
+		realm = info.realmName,
+		class = info.className,
+		level = info.characterLevel,
+		battleTag = info.battleTag,
 	}, 2)
 
 	-- Broadcast message
