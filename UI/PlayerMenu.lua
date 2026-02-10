@@ -41,80 +41,123 @@ local function ShowCopyBox(text)
 	box:SetFocus()
 end
 
----Show context menu for a character friend
----@param name string Character name (possibly with realm)
----@param anchor Frame Frame to anchor menu to
-function PlayerMenu:ShowForCharacter(name, anchor)
-	if InCombatLockdown() then
-		return
+---Add player info lines to a menu description
+---@param rootDescription table Menu root description
+---@param playerData table Player data
+local function AddPlayerInfoLines(rootDescription, playerData)
+	-- Realm
+	local realm = playerData.realm
+	if (not realm or realm == '') and playerData.fullName and playerData.fullName:find('-') then
+		realm = playerData.fullName:match('-(.+)$')
 	end
-	if not name then
-		return
+	if realm and realm ~= '' then
+		rootDescription:CreateTitle('Realm: ' .. realm)
 	end
 
-	MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
-		rootDescription:CreateTitle(name)
-
-		rootDescription:CreateButton('Whisper', function()
-			ChatFrame_SendTell(name)
-		end)
-
-		rootDescription:CreateButton('Invite to Party', function()
-			InviteUnit(name)
-		end)
-
-		if IsInRaid() or (IsInGroup() and (UnitIsGroupLeader('player') or UnitIsGroupAssistant('player'))) then
-			rootDescription:CreateButton('Invite to Raid', function()
-				InviteUnit(name)
-			end)
+	-- Class
+	if playerData.class and playerData.class ~= '' then
+		local className = playerData.class
+		local color = RAID_CLASS_COLORS[className:upper()]
+		if color then
+			rootDescription:CreateTitle('Class: ' .. string.format('|cff%02x%02x%02x%s|r', color.r * 255, color.g * 255, color.b * 255, className))
+		else
+			rootDescription:CreateTitle('Class: ' .. className)
 		end
+	end
 
-		rootDescription:CreateButton('Copy Name', function()
-			ShowCopyBox(name)
-		end)
-	end)
+	-- Level
+	if playerData.level and playerData.level > 0 then
+		rootDescription:CreateTitle('Level: ' .. tostring(playerData.level))
+	end
+
+	-- Rank (guild)
+	if playerData.rank and playerData.rank ~= '' then
+		rootDescription:CreateTitle('Rank: ' .. playerData.rank)
+	end
+
+	-- BattleTag
+	if playerData.battleTag and playerData.battleTag ~= '' then
+		rootDescription:CreateTitle('BattleTag: ' .. playerData.battleTag)
+	end
 end
 
----Show context menu for a Battle.net friend
----@param accountName string? Account display name
----@param accountID number BNet account ID
----@param characterName string? In-game character name
+---Show context menu for a player (character friend, BNet friend, or guild member)
+---@param playerData table Player data from tooltip row
 ---@param anchor Frame Frame to anchor menu to
-function PlayerMenu:ShowForBNet(accountName, accountID, characterName, anchor)
+function PlayerMenu:Show(playerData, anchor)
 	if InCombatLockdown() then
 		return
 	end
-	if not accountID then
-		return
-	end
 
-	local displayName = accountName or 'Unknown'
+	if playerData.accountID then
+		-- BNet friend
+		local displayName = playerData.accountName or 'Unknown'
+		local characterName = playerData.characterName
 
-	MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
-		rootDescription:CreateTitle(displayName)
+		MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
+			rootDescription:CreateTitle(displayName)
 
-		rootDescription:CreateButton('Whisper', function()
-			ChatFrame_SendSmartTell(displayName)
+			-- Player info
+			AddPlayerInfoLines(rootDescription, playerData)
+			rootDescription:CreateDivider()
+
+			-- Actions
+			rootDescription:CreateButton('Whisper', function()
+				ChatFrame_SendSmartTell(displayName)
+			end)
+
+			if characterName and characterName ~= '' then
+				rootDescription:CreateButton('Invite to Party', function()
+					BNInviteFriend(playerData.accountID)
+				end)
+			end
+
+			local accountInfo = C_BattleNet.GetAccountInfoByID(playerData.accountID)
+			local battleTag = accountInfo and accountInfo.battleTag
+			if battleTag then
+				rootDescription:CreateButton('Copy BattleTag', function()
+					ShowCopyBox(battleTag)
+				end)
+			end
+
+			if characterName and characterName ~= '' then
+				rootDescription:CreateButton('Copy Character Name', function()
+					ShowCopyBox(characterName)
+				end)
+			end
 		end)
+	else
+		-- Character friend or guild member
+		local name = playerData.fullName or playerData.name
+		if not name then
+			return
+		end
 
-		if characterName and characterName ~= '' then
+		MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
+			rootDescription:CreateTitle(name)
+
+			-- Player info
+			AddPlayerInfoLines(rootDescription, playerData)
+			rootDescription:CreateDivider()
+
+			-- Actions
+			rootDescription:CreateButton('Whisper', function()
+				ChatFrame_SendTell(name)
+			end)
+
 			rootDescription:CreateButton('Invite to Party', function()
-				BNInviteFriend(accountID)
+				InviteUnit(name)
 			end)
-		end
 
-		local accountInfo = C_BattleNet.GetAccountInfoByID(accountID)
-		local battleTag = accountInfo and accountInfo.battleTag
-		if battleTag then
-			rootDescription:CreateButton('Copy BattleTag', function()
-				ShowCopyBox(battleTag)
-			end)
-		end
+			if IsInRaid() or (IsInGroup() and (UnitIsGroupLeader('player') or UnitIsGroupAssistant('player'))) then
+				rootDescription:CreateButton('Invite to Raid', function()
+					InviteUnit(name)
+				end)
+			end
 
-		if characterName and characterName ~= '' then
-			rootDescription:CreateButton('Copy Character Name', function()
-				ShowCopyBox(characterName)
+			rootDescription:CreateButton('Copy Name', function()
+				ShowCopyBox(name)
 			end)
-		end
-	end)
+		end)
+	end
 end

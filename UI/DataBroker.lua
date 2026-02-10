@@ -30,126 +30,6 @@ local SECTION_COLORS = {
 local STATUS_ICON_AFK = '|TInterface\\FriendsFrame\\StatusIcon-Away:0|t'
 local STATUS_ICON_DND = '|TInterface\\FriendsFrame\\StatusIcon-DnD:0|t'
 
--- Quick Actions hover frame (created once, repositioned per row)
-local actionFrame
-local actionHideTimer
-
----Create or return the shared quick actions hover frame
----@return Frame actionFrame
-local function GetActionFrame()
-	if actionFrame then
-		return actionFrame
-	end
-
-	actionFrame = CreateFrame('Frame', 'LibsSocialQuickActions', UIParent, 'BackdropTemplate')
-	actionFrame:SetFrameStrata('TOOLTIP')
-	actionFrame:SetFrameLevel(100)
-	actionFrame:SetSize(52, 24)
-	actionFrame:SetBackdrop({
-		bgFile = 'Interface\\Tooltips\\UI-Tooltip-Background',
-		edgeFile = 'Interface\\Tooltips\\UI-Tooltip-Border',
-		edgeSize = 8,
-		insets = { left = 2, right = 2, top = 2, bottom = 2 },
-	})
-	actionFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
-	actionFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
-	actionFrame:Hide()
-
-	-- Whisper button
-	local whisperBtn = CreateFrame('Button', nil, actionFrame)
-	whisperBtn:SetSize(20, 20)
-	whisperBtn:SetPoint('LEFT', 4, 0)
-	whisperBtn:SetNormalTexture('Interface\\ChatFrame\\UI-ChatIcon-Chat-Up')
-	whisperBtn:SetHighlightTexture('Interface\\Buttons\\UI-Common-MouseHilight', 'ADD')
-	whisperBtn:SetScript('OnEnter', function()
-		if actionHideTimer then
-			actionHideTimer:Cancel()
-			actionHideTimer = nil
-		end
-		GameTooltip:SetOwner(whisperBtn, 'ANCHOR_TOP')
-		GameTooltip:AddLine('Whisper')
-		GameTooltip:Show()
-	end)
-	whisperBtn:SetScript('OnLeave', function()
-		GameTooltip:Hide()
-		actionHideTimer = C_Timer.NewTimer(0.3, function()
-			actionFrame:Hide()
-		end)
-	end)
-	actionFrame.whisperBtn = whisperBtn
-
-	-- Invite button
-	local inviteBtn = CreateFrame('Button', nil, actionFrame)
-	inviteBtn:SetSize(20, 20)
-	inviteBtn:SetPoint('LEFT', whisperBtn, 'RIGHT', 4, 0)
-	inviteBtn:SetNormalTexture('Interface\\FriendsFrame\\UI-FriendsFrame-Link')
-	inviteBtn:SetHighlightTexture('Interface\\Buttons\\UI-Common-MouseHilight', 'ADD')
-	inviteBtn:SetScript('OnEnter', function()
-		if actionHideTimer then
-			actionHideTimer:Cancel()
-			actionHideTimer = nil
-		end
-		GameTooltip:SetOwner(inviteBtn, 'ANCHOR_TOP')
-		GameTooltip:AddLine('Invite to Group')
-		GameTooltip:Show()
-	end)
-	inviteBtn:SetScript('OnLeave', function()
-		GameTooltip:Hide()
-		actionHideTimer = C_Timer.NewTimer(0.3, function()
-			actionFrame:Hide()
-		end)
-	end)
-	actionFrame.inviteBtn = inviteBtn
-
-	-- Keep visible while mouse is over the action frame itself
-	actionFrame:SetScript('OnEnter', function()
-		if actionHideTimer then
-			actionHideTimer:Cancel()
-			actionHideTimer = nil
-		end
-	end)
-	actionFrame:SetScript('OnLeave', function()
-		actionHideTimer = C_Timer.NewTimer(0.3, function()
-			actionFrame:Hide()
-		end)
-	end)
-
-	return actionFrame
-end
-
----Show quick actions for a player, anchored to a cell
----@param cell Frame The cell frame to anchor to
----@param playerData table Player data
-local function ShowQuickActions(cell, playerData)
-	local af = GetActionFrame()
-
-	-- Position to the right of the row
-	af:ClearAllPoints()
-	af:SetPoint('LEFT', cell, 'RIGHT', 2, 0)
-
-	-- Configure whisper button
-	af.whisperBtn:SetScript('OnClick', function()
-		if playerData.accountID then
-			ChatFrame_SendSmartTell(playerData.accountName)
-		elseif playerData.name then
-			ChatFrame_SendTell(playerData.fullName or playerData.name)
-		end
-		af:Hide()
-	end)
-
-	-- Configure invite button
-	af.inviteBtn:SetScript('OnClick', function()
-		if playerData.accountID then
-			BNInviteFriend(playerData.accountID)
-		elseif playerData.name then
-			C_PartyInfo.InviteUnit(playerData.fullName or playerData.name)
-		end
-		af:Hide()
-	end)
-
-	af:Show()
-end
-
 -- Create the LibDataBroker object
 local socialLDB
 
@@ -406,149 +286,37 @@ local function AddFullLine(tooltip, text, r, g, b)
 	return row
 end
 
----Show a GameTooltip with player details (realm, class, level) on row hover
----@param frame Frame The cell frame to anchor the tooltip to
----@param playerData table Player data containing realm, class, level, etc.
-local function ShowPlayerInfoTooltip(frame, playerData)
-	local lines = {}
-
-	-- Realm (most important for distinguishing same-name characters)
-	if playerData.realm and playerData.realm ~= '' then
-		table.insert(lines, { label = 'Realm', value = playerData.realm })
-	elseif playerData.fullName and playerData.fullName:find('-') then
-		-- Extract realm from fullName like "Name-Realm"
-		local realm = playerData.fullName:match('-(.+)$')
-		if realm then
-			table.insert(lines, { label = 'Realm', value = realm })
-		end
-	end
-
-	-- Class
-	if playerData.class and playerData.class ~= '' then
-		local className = playerData.class
-		local color = RAID_CLASS_COLORS[className:upper()]
-		if color then
-			table.insert(lines, { label = 'Class', value = string.format('|cff%02x%02x%02x%s|r', color.r * 255, color.g * 255, color.b * 255, className) })
-		else
-			table.insert(lines, { label = 'Class', value = className })
-		end
-	end
-
-	-- Level
-	if playerData.level and playerData.level > 0 then
-		table.insert(lines, { label = 'Level', value = tostring(playerData.level) })
-	end
-
-	-- Rank (guild)
-	if playerData.rank and playerData.rank ~= '' then
-		table.insert(lines, { label = 'Rank', value = playerData.rank })
-	end
-
-	-- BattleTag
-	if playerData.battleTag and playerData.battleTag ~= '' then
-		table.insert(lines, { label = 'BattleTag', value = playerData.battleTag })
-	end
-
-	-- Only show if we have something useful
-	if #lines == 0 then
-		return
-	end
-
-	GameTooltip:SetOwner(frame, 'ANCHOR_CURSOR')
-	-- Raise frame level so GameTooltip renders above the LibQTip tooltip (both use TOOLTIP strata)
-	GameTooltip:SetFrameStrata('TOOLTIP')
-	GameTooltip:Raise()
-	GameTooltip:AddLine(playerData.name or playerData.accountName or 'Unknown', 1, 1, 1)
-	for _, line in ipairs(lines) do
-		GameTooltip:AddDoubleLine(line.label, line.value, 0.5, 0.5, 0.5, 1, 1, 1)
-	end
-	GameTooltip:Show()
-end
-
 ---Set up a player row with right-click context menu and hover highlight
 ---Scripts must be set on cells (not rows) because cells have higher frame level and intercept mouse events.
 ---@param row table LibQTip-2.0 row
 ---@param playerData table Player data for context menu
 ---@param numCols number Number of columns in the tooltip
 local function SetupPlayerRow(row, playerData, numCols)
-	local handler = function(frame, button)
-		LibsSocial:Log(
-			'Row clicked: button='
-				.. tostring(button)
-				.. ' name='
-				.. tostring(playerData.name)
-				.. ' accountName='
-				.. tostring(playerData.accountName)
-				.. ' accountID='
-				.. tostring(playerData.accountID),
-			'debug'
-		)
+	-- LibQTip-2.0's Cell:SetScript injects a nil Parameter arg before the real script args.
+	-- So OnMouseDown receives (frame, nil, button) instead of (frame, button).
+	-- We use select(2, ...) to skip the injected arg and get the real button.
+	local handler = function(frame, ...)
+		local button = select(2, ...)
 		if button == 'LeftButton' then
 			-- Click-to-whisper
 			if playerData.accountID then
-				-- BNet friend: use smart tell with account name
-				LibsSocial:Log('Whisper BNet: ' .. tostring(playerData.accountName), 'debug')
 				ChatFrame_SendSmartTell(playerData.accountName)
 			elseif playerData.name then
-				-- Character friend or guild member
-				LibsSocial:Log('Whisper Character: ' .. tostring(playerData.fullName or playerData.name), 'debug')
 				ChatFrame_SendTell(playerData.fullName or playerData.name)
-			else
-				LibsSocial:Log('Left-click but no accountID or name in playerData', 'warning')
 			end
 		elseif button == 'RightButton' then
-			LibsSocial:Log('Right-click: PlayerMenu exists=' .. tostring(LibsSocial.PlayerMenu ~= nil), 'debug')
 			if LibsSocial.PlayerMenu then
-				if playerData.accountID then
-					LibsSocial.PlayerMenu:ShowForBNet(playerData.accountName, playerData.accountID, playerData.characterName, frame)
-				elseif playerData.name then
-					LibsSocial.PlayerMenu:ShowForCharacter(playerData.fullName or playerData.name, frame)
-				end
+				LibsSocial.PlayerMenu:Show(playerData, frame)
 			end
 		end
 	end
 
 	-- Set script on each cell so clicks are captured regardless of which column is clicked
-	-- Use OnMouseUp (not OnMouseDown) — this is the proven pattern for LibQTip-2.0 interactions
+	-- Use OnMouseDown so the menu opens on press (OnMouseUp fires after release + includes extra args)
 	for i = 1, numCols do
 		local cell = row:GetCell(i)
 		if cell then
-			cell:SetScript('OnMouseUp', handler)
-			-- Verify the script was actually set and mouse is enabled
-			local hasScript = cell:GetScript('OnMouseUp')
-			LibsSocial:Log(
-				'Cell '
-					.. i
-					.. ' OnMouseUp set='
-					.. tostring(hasScript ~= nil)
-					.. ' EnableMouse='
-					.. tostring(cell:IsMouseEnabled())
-					.. ' visible='
-					.. tostring(cell:IsVisible())
-					.. ' name='
-					.. tostring(playerData.name or playerData.accountName),
-				'debug'
-			)
-			-- Hover to show quick actions + info tooltip
-			cell:SetScript('OnEnter', function(frame)
-				if actionHideTimer then
-					actionHideTimer:Cancel()
-					actionHideTimer = nil
-				end
-				-- Use last cell for anchor positioning
-				local lastCell = row:GetCell(numCols) or frame
-				ShowQuickActions(lastCell, playerData)
-				-- Show player info tooltip (realm, class, level)
-				ShowPlayerInfoTooltip(frame, playerData)
-			end)
-			cell:SetScript('OnLeave', function()
-				GameTooltip:Hide()
-				actionHideTimer = C_Timer.NewTimer(0.3, function()
-					if actionFrame then
-						actionFrame:Hide()
-					end
-				end)
-			end)
+			cell:SetScript('OnMouseDown', handler)
 		else
 			LibsSocial:Log('SetupPlayerRow: cell ' .. i .. ' is nil for row', 'warning')
 		end

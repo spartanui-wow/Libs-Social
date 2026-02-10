@@ -36,7 +36,7 @@ Libs-Social/
 Uses LibQTip-2.0 for multi-column, scrollable tooltips with per-row click handlers and auto-hide.
 - **LibQTip-2.0 API**: `AcquireTooltip` / `ReleaseTooltip` pattern, `SmartAnchorTo`, `SetAutoHideDelay`, `SetMaxHeight` for scrolling
 - **Collapsible sections**: Click headers to collapse/expand; persisted in `db.profile.display.collapsedSections`
-- **Right-click menus**: Per-row `OnMouseDown` scripts → `PlayerMenu:ShowForCharacter/ShowForBNet`
+- **Right-click menus**: Per-row `OnMouseUp` scripts → `PlayerMenu:Show(playerData, anchor)` — shows player info + actions
 - **Sections**: BNet In-Game, BNet App (or combined), Character Friends, Guild
 - **Toggleable features**: Levels, notes, officer notes, zones, rank, broadcasts, game client, WoW project, same-zone highlighting, status icons
 - **Event bucketing**: AceBucket-3.0 (1s bucket) for friend/guild event coalescing
