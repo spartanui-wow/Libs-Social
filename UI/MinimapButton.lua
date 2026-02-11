@@ -8,6 +8,14 @@ function LibsSocial:InitializeMinimapButton()
 		return
 	end
 
+	-- Smart default: hide minimap icon when Libs-DataBar is present (it shows LDB data already)
+	if not self.db.profile.minimapDefaultApplied then
+		self.db.profile.minimapDefaultApplied = true
+		if C_AddOns.IsAddOnLoaded('Libs-DataBar') then
+			self.db.profile.minimap.hide = true
+		end
+	end
+
 	-- Register the minimap button
 	LibDBIcon:Register("Lib's Social", self.dataObject, self.db.profile.minimap)
 
