@@ -374,6 +374,29 @@ function LibsSocial:ShowCustomTooltip(anchor)
 	local tooltip = QTip:AcquireTooltip(TOOLTIP_KEY, 2, 'LEFT', 'RIGHT')
 	self.activeTooltip = tooltip
 
+	-- Hook IsMouseOver so the auto-hide timer also pauses when a Blizzard context menu is open.
+	-- Without this, right-clicking a player row opens a MenuUtil context menu that can extend
+	-- outside the tooltip bounds — moving the mouse onto that menu causes the parent tooltip
+	-- to auto-hide (killing the context menu too).
+	if not tooltip._isMouseOverHooked then
+		local origIsMouseOver = tooltip.IsMouseOver
+		tooltip.IsMouseOver = function(self, ...)
+			if origIsMouseOver(self, ...) then
+				return true
+			end
+			-- If a Blizzard context menu is open and hovered, treat as "mouse over" to prevent auto-hide
+			local menuManager = Menu and Menu.GetManager()
+			if menuManager and menuManager:IsAnyMenuOpen() then
+				local openMenu = menuManager:GetOpenMenu()
+				if openMenu and openMenu:IsMouseOver() then
+					return true
+				end
+			end
+			return false
+		end
+		tooltip._isMouseOverHooked = true
+	end
+
 	-- Configure max height for scrolling
 	tooltip:SetMaxHeight(UIParent:GetHeight() * 0.6)
 
