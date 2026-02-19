@@ -63,6 +63,60 @@ function LibsSocial:InitializeDataBroker()
 			local anchor = owner or tooltip
 			LibsSocial:ShowCustomTooltip(anchor)
 		end,
+		GetOptions = function()
+			return {
+				type = 'group',
+				name = 'Social Settings',
+				args = {
+					format = {
+						type = 'select',
+						name = 'Display Format',
+						desc = 'How to display friend counts',
+						order = 1,
+						values = {
+							combined = 'Combined (Total)',
+							friends = 'Friends Only',
+							guild = 'Guild Only',
+							realid = 'Battle.net Only',
+							detailed = 'Detailed (F/B/G)',
+						},
+						get = function()
+							return LibsSocial.db.profile.display.format
+						end,
+						set = function(_, val)
+							LibsSocial.db.profile.display.format = val
+							LibsSocial:UpdateDisplay()
+						end,
+					},
+					colorByStatus = {
+						type = 'toggle',
+						name = 'Color by Status',
+						desc = 'Color the display text based on online/offline status',
+						order = 2,
+						get = function()
+							return LibsSocial.db.profile.display.colorByStatus
+						end,
+						set = function(_, val)
+							LibsSocial.db.profile.display.colorByStatus = val
+							LibsSocial:UpdateDisplay()
+						end,
+					},
+					colorCodedCounts = {
+						type = 'toggle',
+						name = 'Color-Coded Counts',
+						desc = 'Color each category differently in Detailed format',
+						order = 3,
+						get = function()
+							return LibsSocial.db.profile.display.colorCodedCounts
+						end,
+						set = function(_, val)
+							LibsSocial.db.profile.display.colorCodedCounts = val
+							LibsSocial:UpdateDisplay()
+						end,
+					},
+				},
+			}
+		end,
 	})
 
 	self.dataObject = socialLDB
