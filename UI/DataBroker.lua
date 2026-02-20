@@ -1,6 +1,10 @@
 ---@class LibsSocial
 local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 
+---@class LibsSocial.DataBroker : AceModule
+local DataBroker = LibsSocial:NewModule('DataBroker')
+LibsSocial.DataBroker = DataBroker
+
 local LDB = LibStub('LibDataBroker-1.1')
 local QTip = LibStub('LibQTip-2.0')
 
@@ -30,11 +34,8 @@ local SECTION_COLORS = {
 local STATUS_ICON_AFK = '|TInterface\\FriendsFrame\\StatusIcon-Away:0|t'
 local STATUS_ICON_DND = '|TInterface\\FriendsFrame\\StatusIcon-DnD:0|t'
 
--- Create the LibDataBroker object
-local socialLDB
-
-function LibsSocial:InitializeDataBroker()
-	socialLDB = LDB:NewDataObject("Lib's Social", {
+function DataBroker:OnEnable()
+	self.socialLDB = LDB:NewDataObject("Lib's Social", {
 		type = 'data source',
 		text = 'Loading...',
 		icon = 'Interface\\FriendsFrame\\UI-Toast-FriendOnlineIcon',
@@ -47,7 +48,7 @@ function LibsSocial:InitializeDataBroker()
 					ToggleFriendsFrame()
 				end
 			elseif button == 'RightButton' then
-				LibsSocial:CycleDisplayFormat()
+				self:CycleDisplayFormat()
 			elseif button == 'MiddleButton' then
 				if IsInGuild() then
 					ToggleGuildFrame()
@@ -61,7 +62,7 @@ function LibsSocial:InitializeDataBroker()
 			local owner = tooltip:GetOwner()
 			tooltip:Hide()
 			local anchor = owner or tooltip
-			LibsSocial:ShowCustomTooltip(anchor)
+			self:ShowCustomTooltip(anchor)
 		end,
 		GetOptions = function()
 			return {
@@ -85,7 +86,7 @@ function LibsSocial:InitializeDataBroker()
 						end,
 						set = function(_, val)
 							LibsSocial.db.profile.display.format = val
-							LibsSocial:UpdateDisplay()
+							self:UpdateDisplay()
 						end,
 					},
 					colorByStatus = {
@@ -98,7 +99,7 @@ function LibsSocial:InitializeDataBroker()
 						end,
 						set = function(_, val)
 							LibsSocial.db.profile.display.colorByStatus = val
-							LibsSocial:UpdateDisplay()
+							self:UpdateDisplay()
 						end,
 					},
 					colorCodedCounts = {
@@ -111,7 +112,7 @@ function LibsSocial:InitializeDataBroker()
 						end,
 						set = function(_, val)
 							LibsSocial.db.profile.display.colorCodedCounts = val
-							LibsSocial:UpdateDisplay()
+							self:UpdateDisplay()
 						end,
 					},
 				},
@@ -119,32 +120,32 @@ function LibsSocial:InitializeDataBroker()
 		end,
 	})
 
-	self.dataObject = socialLDB
+	LibsSocial.dataObject = self.socialLDB
 	self:UpdateDisplay()
 end
 
-function LibsSocial:UpdateDisplay()
-	if not socialLDB then
+function DataBroker:UpdateDisplay()
+	if not self.socialLDB then
 		return
 	end
 
-	local Friends = self.Friends
+	local Friends = LibsSocial.Friends
 
 	local text = self:GetDisplayText()
-	socialLDB.text = text
+	self.socialLDB.text = text
 
 	-- Update icon based on online status
 	local totalOnline = Friends:GetTotalOnline()
 	if totalOnline > 0 then
-		socialLDB.icon = 'Interface\\FriendsFrame\\UI-Toast-FriendOnlineIcon'
+		self.socialLDB.icon = 'Interface\\FriendsFrame\\UI-Toast-FriendOnlineIcon'
 	else
-		socialLDB.icon = 'Interface\\FriendsFrame\\UI-Toast-FriendOfflineIcon'
+		self.socialLDB.icon = 'Interface\\FriendsFrame\\UI-Toast-FriendOfflineIcon'
 	end
 end
 
-function LibsSocial:GetDisplayText()
-	local db = self.db.profile.display
-	local Friends = self.Friends
+function DataBroker:GetDisplayText()
+	local db = LibsSocial.db.profile.display
+	local Friends = LibsSocial.Friends
 
 	local text = ''
 	local format = db.format
@@ -202,9 +203,9 @@ function LibsSocial:GetDisplayText()
 	return text
 end
 
-function LibsSocial:CycleDisplayFormat()
+function DataBroker:CycleDisplayFormat()
 	local formats = { 'combined', 'friends', 'guild', 'realid', 'detailed' }
-	local current = self.db.profile.display.format
+	local current = LibsSocial.db.profile.display.format
 	local currentIndex = 1
 
 	for i, format in ipairs(formats) do
@@ -215,9 +216,9 @@ function LibsSocial:CycleDisplayFormat()
 	end
 
 	local nextIndex = currentIndex < #formats and currentIndex + 1 or 1
-	self.db.profile.display.format = formats[nextIndex]
+	LibsSocial.db.profile.display.format = formats[nextIndex]
 
-	self:Log('Display format: ' .. formats[nextIndex], 'info')
+	LibsSocial:Log('Display format: ' .. formats[nextIndex], 'info')
 	self:UpdateDisplay()
 end
 
@@ -283,7 +284,7 @@ local function GetGroupIndicator(name)
 	-- Try both the raw name and the ambiguated version
 	local short = Ambiguate(name, 'none')
 	if UnitInParty(short) or UnitInRaid(short) or UnitInParty(name) or UnitInRaid(name) then
-		return '|cff00ff00\226\156\147|r ' -- Green checkmark ✓
+		return '|cff00ff00\226\156\147|r ' -- Green checkmark
 	end
 
 	return ''
@@ -398,12 +399,12 @@ local function AddSectionHeader(tooltip, text, countText, sectionKey, color)
 	local row = tooltip:AddRow(headerText, countText)
 	row:SetColor(0.15, 0.15, 0.15, 0.5)
 
-	-- Click to toggle collapse — set on cells since they intercept mouse events above rows
+	-- Click to toggle collapse - set on cells since they intercept mouse events above rows
 	local toggleHandler = function()
 		LibsSocial.db.profile.display.collapsedSections[sectionKey] = not collapsed
 		-- Rebuild the tooltip
-		if LibsSocial.activeAnchor then
-			LibsSocial:ShowCustomTooltip(LibsSocial.activeAnchor)
+		if DataBroker.activeAnchor then
+			DataBroker:ShowCustomTooltip(DataBroker.activeAnchor)
 		end
 	end
 
@@ -415,7 +416,7 @@ end
 
 ---Show the custom tooltip anchored to a frame
 ---@param anchor Frame The frame to anchor to
-function LibsSocial:ShowCustomTooltip(anchor)
+function DataBroker:ShowCustomTooltip(anchor)
 	-- Release any existing tooltip
 	if QTip:IsAcquiredTooltip(TOOLTIP_KEY) then
 		QTip:ReleaseTooltip(self.activeTooltip)
@@ -430,7 +431,7 @@ function LibsSocial:ShowCustomTooltip(anchor)
 
 	-- Hook IsMouseOver so the auto-hide timer also pauses when a Blizzard context menu is open.
 	-- Without this, right-clicking a player row opens a MenuUtil context menu that can extend
-	-- outside the tooltip bounds — moving the mouse onto that menu causes the parent tooltip
+	-- outside the tooltip bounds - moving the mouse onto that menu causes the parent tooltip
 	-- to auto-hide (killing the context menu too).
 	if not tooltip._isMouseOverHooked then
 		local origIsMouseOver = tooltip.IsMouseOver
@@ -466,11 +467,11 @@ end
 
 ---Build all tooltip content sections
 ---@param tooltip table LibQTip-2.0 tooltip
-function LibsSocial:BuildTooltipContent(tooltip)
-	local Friends = self.Friends
-	local TT = self.Tooltip
-	local GC = self.GameClients
-	local db = self.db.profile
+function DataBroker:BuildTooltipContent(tooltip)
+	local Friends = LibsSocial.Friends
+	local TT = LibsSocial.Tooltip
+	local GC = LibsSocial.GameClients
+	local db = LibsSocial.db.profile
 	local ttDb = db.display.tooltip
 
 	-- Title
@@ -661,13 +662,13 @@ function LibsSocial:BuildTooltipContent(tooltip)
 end
 
 ---Build activity-grouped content: classifies all online players into activity buckets
----Buckets: In My Group → In My Zone → Available → Busy/AFK → Other Games
+---Buckets: In My Group -> In My Zone -> Available -> Busy/AFK -> Other Games
 ---@param tooltip table LibQTip-2.0 tooltip
 ---@param Friends table Friends data
 ---@param TT table Tooltip helpers
 ---@param GC table GameClients
 ---@param ttDb table Tooltip settings
-function LibsSocial:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
+function DataBroker:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
 	-- Classification buckets
 	local buckets = {
 		{ key = 'inGroup', name = 'In My Group', color = { r = 0, g = 1, b = 0 }, players = {} },
@@ -869,7 +870,7 @@ end
 ---@param TT table Tooltip helpers
 ---@param GC table GameClients
 ---@param ttDb table Tooltip settings
-function LibsSocial:BuildBNetInGameSection(tooltip, Friends, TT, GC, ttDb)
+function DataBroker:BuildBNetInGameSection(tooltip, Friends, TT, GC, ttDb)
 	if Friends.numBattleNetInGame == 0 then
 		return
 	end
@@ -890,7 +891,7 @@ end
 ---@param TT table Tooltip helpers
 ---@param GC table GameClients
 ---@param ttDb table Tooltip settings
-function LibsSocial:BuildBNetAppSection(tooltip, Friends, TT, GC, ttDb)
+function DataBroker:BuildBNetAppSection(tooltip, Friends, TT, GC, ttDb)
 	if Friends.numBattleNetAppOnly == 0 then
 		return
 	end
@@ -911,7 +912,7 @@ end
 ---@param TT table Tooltip helpers
 ---@param GC table GameClients
 ---@param ttDb table Tooltip settings
-function LibsSocial:BuildBNetCombinedSection(tooltip, Friends, TT, GC, ttDb)
+function DataBroker:BuildBNetCombinedSection(tooltip, Friends, TT, GC, ttDb)
 	tooltip:AddSeparator()
 	local collapsed = AddSectionHeader(
 		tooltip,
@@ -939,7 +940,7 @@ end
 ---@param GC table GameClients
 ---@param ttDb table Tooltip settings
 ---@param info table Friend data
-function LibsSocial:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
+function DataBroker:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 	local accountTag = info.battleTag or info.accountName or 'Unknown'
 	accountTag = accountTag:gsub('#%d+$', '')
 

@@ -1,7 +1,11 @@
 ---@class LibsSocial
 local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 
-function LibsSocial:RegisterEvents()
+---@class LibsSocial.Events : AceModule, AceEvent-3.0, AceBucket-3.0
+local Events = LibsSocial:NewModule('Events', 'AceEvent-3.0', 'AceBucket-3.0')
+LibsSocial.Events = Events
+
+function Events:OnEnable()
 	-- Friend list events (bucketed to avoid rapid-fire refreshes)
 	self:RegisterBucketEvent({
 		'FRIENDLIST_UPDATE',
@@ -12,7 +16,7 @@ function LibsSocial:RegisterEvents()
 		'GROUP_ROSTER_UPDATE',
 	}, 1, 'OnFriendListUpdateBucket')
 
-	-- Zone tracking for same-zone highlighting
+	-- Zone tracking
 	self:RegisterEvent('ZONE_CHANGED_NEW_AREA', 'OnZoneChanged')
 
 	-- Blocking events
@@ -25,7 +29,6 @@ function LibsSocial:RegisterEvents()
 	-- Auto-accept events
 	self:RegisterEvent('CONFIRM_SUMMON', 'OnConfirmSummon')
 	self:RegisterEvent('LFG_PROPOSAL_SHOW', 'OnLFGProposalShow')
-	self:RegisterEvent('PARTY_INVITE_REQUEST', 'OnPartyInviteForAutoAccept')
 	self:RegisterEvent('CHAT_MSG_WHISPER', 'OnWhisper')
 
 	-- Player login
@@ -33,91 +36,87 @@ function LibsSocial:RegisterEvents()
 	self:RegisterEvent('PLAYER_ENTERING_WORLD', 'OnPlayerEnteringWorld')
 end
 
-function LibsSocial:OnPlayerLogin()
-	-- Request friend list update
+function Events:OnDisable()
+	self:UnregisterAllEvents()
+	self:UnregisterAllBuckets()
+end
+
+function Events:OnPlayerLogin()
 	C_FriendList.ShowFriends()
 	if IsInGuild() then
 		C_GuildInfo.GuildRoster()
 	end
 end
 
-function LibsSocial:OnPlayerEnteringWorld()
-	-- Update display after entering world
-	if self.UpdateDisplay then
-		self:UpdateDisplay()
+function Events:OnPlayerEnteringWorld()
+	if LibsSocial.UpdateDisplay then
+		LibsSocial:UpdateDisplay()
 	end
 end
 
-function LibsSocial:OnFriendListUpdateBucket()
-	-- Update cached friend data
-	if self.Friends and self.Friends.RefreshData then
-		self.Friends:RefreshData()
+function Events:OnFriendListUpdateBucket()
+	if LibsSocial.Friends then
+		LibsSocial.Friends:RefreshData()
 	end
 
-	-- Update display
-	if self.UpdateDisplay then
-		self:UpdateDisplay()
+	if LibsSocial.UpdateDisplay then
+		LibsSocial:UpdateDisplay()
 	end
 end
 
-function LibsSocial:OnZoneChanged()
-	if self.Friends then
-		self.Friends:RefreshPlayerZone()
+function Events:OnZoneChanged()
+	if LibsSocial.Friends then
+		LibsSocial.Friends:RefreshPlayerZone()
 	end
 end
 
--- Blocking event handlers (delegated to Blocking module)
-function LibsSocial:OnDuelRequested(event, name)
-	if self.Blocking and self.Blocking.HandleDuel then
-		self.Blocking:HandleDuel(name)
+function Events:OnDuelRequested(event, name)
+	if LibsSocial.Blocking then
+		LibsSocial.Blocking:HandleDuel(name)
 	end
 end
 
-function LibsSocial:OnPetDuelRequested(event, name)
-	if self.Blocking and self.Blocking.HandlePetDuel then
-		self.Blocking:HandlePetDuel(name)
+function Events:OnPetDuelRequested(event, name)
+	if LibsSocial.Blocking then
+		LibsSocial.Blocking:HandlePetDuel(name)
 	end
 end
 
-function LibsSocial:OnPartyInviteRequest(event, name, ...)
-	if self.Blocking and self.Blocking.HandlePartyInvite then
-		self.Blocking:HandlePartyInvite(name, ...)
+function Events:OnPartyInviteRequest(event, name, ...)
+	if LibsSocial.Blocking then
+		LibsSocial.Blocking:HandlePartyInvite(name, ...)
+	end
+	if LibsSocial.AutoAccept then
+		LibsSocial.AutoAccept:HandlePartyInvite(name, ...)
 	end
 end
 
-function LibsSocial:OnFriendInviteReceived(event, ...)
-	if self.Blocking and self.Blocking.HandleFriendInvite then
-		self.Blocking:HandleFriendInvite(...)
+function Events:OnFriendInviteReceived(event, ...)
+	if LibsSocial.Blocking then
+		LibsSocial.Blocking:HandleFriendInvite(...)
 	end
 end
 
-function LibsSocial:OnQuestAcceptConfirm(event, name, questTitle)
-	if self.Blocking and self.Blocking.HandleSharedQuest then
-		self.Blocking:HandleSharedQuest(name, questTitle)
+function Events:OnQuestAcceptConfirm(event, name, questTitle)
+	if LibsSocial.Blocking then
+		LibsSocial.Blocking:HandleSharedQuest(name, questTitle)
 	end
 end
 
--- Auto-accept event handlers (delegated to AutoAccept module)
-function LibsSocial:OnConfirmSummon(event)
-	if self.AutoAccept and self.AutoAccept.HandleSummon then
-		self.AutoAccept:HandleSummon()
+function Events:OnConfirmSummon()
+	if LibsSocial.AutoAccept then
+		LibsSocial.AutoAccept:HandleSummon()
 	end
 end
 
-function LibsSocial:OnLFGProposalShow(event)
-	if self.AutoAccept and self.AutoAccept.HandleLFGProposal then
-		self.AutoAccept:HandleLFGProposal()
+function Events:OnLFGProposalShow()
+	if LibsSocial.AutoAccept then
+		LibsSocial.AutoAccept:HandleLFGProposal()
 	end
 end
 
-function LibsSocial:OnPartyInviteForAutoAccept(event, name, ...)
-	if self.AutoAccept and self.AutoAccept.HandlePartyInvite then
-		self.AutoAccept:HandlePartyInvite(name, ...)
-	end
-end
-
-function LibsSocial:OnWhisper(event, message, sender, ...)
-	if self.AutoAccept and self.AutoAccept.HandleWhisper then
-		self.AutoAccept:HandleWhisper(message, sender, ...)
+function Events:OnWhisper(event, message, sender, ...)
+	if LibsSocial.AutoAccept then
+		LibsSocial.AutoAccept:HandleWhisper(message, sender, ...)
 	end
 end

@@ -1,35 +1,39 @@
 ---@class LibsSocial
 local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 
+---@class LibsSocial.MinimapButton : AceModule
+local MinimapButton = LibsSocial:NewModule('MinimapButton')
+LibsSocial.MinimapButton = MinimapButton
+
 local LibDBIcon = LibStub('LibDBIcon-1.0')
 
-function LibsSocial:InitializeMinimapButton()
-	if not self.dataObject then
+function MinimapButton:OnEnable()
+	if not LibsSocial.dataObject then
 		return
 	end
 
 	-- Smart default: hide minimap icon when Libs-DataBar is present (it shows LDB data already)
-	if not self.db.profile.minimapDefaultApplied then
-		self.db.profile.minimapDefaultApplied = true
+	if not LibsSocial.db.profile.minimapDefaultApplied then
+		LibsSocial.db.profile.minimapDefaultApplied = true
 		if C_AddOns.IsAddOnLoaded('Libs-DataBar') then
-			self.db.profile.minimap.hide = true
+			LibsSocial.db.profile.minimap.hide = true
 		end
 	end
 
 	-- Register the minimap button
-	LibDBIcon:Register("Lib's Social", self.dataObject, self.db.profile.minimap)
+	LibDBIcon:Register("Lib's Social", LibsSocial.dataObject, LibsSocial.db.profile.minimap)
 
 	-- Apply initial visibility
-	if self.db.profile.minimap.hide then
+	if LibsSocial.db.profile.minimap.hide then
 		LibDBIcon:Hide("Lib's Social")
 	else
 		LibDBIcon:Show("Lib's Social")
 	end
 end
 
-function LibsSocial:ToggleMinimapButton()
-	local hide = not self.db.profile.minimap.hide
-	self.db.profile.minimap.hide = hide
+function MinimapButton:ToggleMinimapButton()
+	local hide = not LibsSocial.db.profile.minimap.hide
+	LibsSocial.db.profile.minimap.hide = hide
 
 	if hide then
 		LibDBIcon:Hide("Lib's Social")

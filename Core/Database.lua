@@ -1,9 +1,12 @@
 ---@class LibsSocial
 local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 
+---@class LibsSocial.Database : AceModule
+local Database = LibsSocial:NewModule('Database')
+LibsSocial.Database = Database
+
 local defaults = {
 	profile = {
-		-- Blocking settings
 		blocking = {
 			enabled = false,
 			duels = true,
@@ -12,7 +15,6 @@ local defaults = {
 			friendRequests = false,
 			sharedQuests = false,
 		},
-		-- Auto-accept settings
 		autoAccept = {
 			enabled = false,
 			partyFromFriends = true,
@@ -21,24 +23,22 @@ local defaults = {
 			inviteKeyword = '',
 			inviteKeywordEnabled = false,
 		},
-		-- Friend treatment settings
 		friendTreatment = {
 			guildAsFriends = true,
 			communityAsFriends = false,
 		},
-		-- Display settings
 		display = {
-			format = 'combined', -- 'combined', 'friends', 'guild', 'realid', 'detailed'
+			format = 'combined',
 			showLabel = true,
 			showMobileIndicators = true,
 			showStatusIcons = true,
 			colorByStatus = true,
-			colorCodedCounts = false, -- Color each category in detailed format
+			colorCodedCounts = false,
 			tooltip = {
-				extraWidth = 0, -- 0-200 additional pixel width
-				sortField = 'name', -- 'name', 'level', 'class', 'zone', 'rank'
-				sortDirection = 'asc', -- 'asc', 'desc'
-				groupMode = 'default', -- 'default', 'activity'
+				extraWidth = 0,
+				sortField = 'name',
+				sortDirection = 'asc',
+				groupMode = 'default',
 				showLevels = true,
 				showNotes = true,
 				showOfficerNotes = false,
@@ -63,24 +63,21 @@ local defaults = {
 				activity_otherGames = false,
 			},
 		},
-		-- Minimap button
 		minimap = {
 			hide = false,
 		},
 	},
 }
 
-function LibsSocial:InitializeDatabase()
-	self.db = LibStub('AceDB-3.0'):New('LibsSocialDB', defaults, true)
+function Database:OnInitialize()
+	LibsSocial.db = LibStub('AceDB-3.0'):New('LibsSocialDB', defaults, true)
 
-	-- Register profile callbacks
-	self.db.RegisterCallback(self, 'OnProfileChanged', 'OnProfileChanged')
-	self.db.RegisterCallback(self, 'OnProfileCopied', 'OnProfileChanged')
-	self.db.RegisterCallback(self, 'OnProfileReset', 'OnProfileChanged')
+	LibsSocial.db.RegisterCallback(LibsSocial, 'OnProfileChanged', 'OnProfileChanged')
+	LibsSocial.db.RegisterCallback(LibsSocial, 'OnProfileCopied', 'OnProfileChanged')
+	LibsSocial.db.RegisterCallback(LibsSocial, 'OnProfileReset', 'OnProfileChanged')
 end
 
 function LibsSocial:OnProfileChanged()
-	-- Refresh systems when profile changes
 	if self.UpdateDisplay then
 		self:UpdateDisplay()
 	end

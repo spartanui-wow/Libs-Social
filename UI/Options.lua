@@ -1,10 +1,14 @@
 ---@class LibsSocial
 local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 
+---@class LibsSocial.Options : AceModule
+local Options = LibsSocial:NewModule('Options')
+LibsSocial.Options = Options
+
 local AceConfig = LibStub('AceConfig-3.0')
 local AceConfigDialog = LibStub('AceConfigDialog-3.0')
 
-function LibsSocial:InitializeOptions()
+function Options:OnEnable()
 	local options = {
 		name = "Lib's Social",
 		type = 'group',
@@ -33,11 +37,11 @@ function LibsSocial:InitializeOptions()
 							detailed = 'Detailed (F/B/G)',
 						},
 						get = function()
-							return self.db.profile.display.format
+							return LibsSocial.db.profile.display.format
 						end,
 						set = function(_, value)
-							self.db.profile.display.format = value
-							self:UpdateDisplay()
+							LibsSocial.db.profile.display.format = value
+							LibsSocial:UpdateDisplay()
 						end,
 					},
 					colorByStatus = {
@@ -46,11 +50,11 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 3,
 						get = function()
-							return self.db.profile.display.colorByStatus
+							return LibsSocial.db.profile.display.colorByStatus
 						end,
 						set = function(_, value)
-							self.db.profile.display.colorByStatus = value
-							self:UpdateDisplay()
+							LibsSocial.db.profile.display.colorByStatus = value
+							LibsSocial:UpdateDisplay()
 						end,
 					},
 					showMobileIndicators = {
@@ -59,10 +63,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 4,
 						get = function()
-							return self.db.profile.display.showMobileIndicators
+							return LibsSocial.db.profile.display.showMobileIndicators
 						end,
 						set = function(_, value)
-							self.db.profile.display.showMobileIndicators = value
+							LibsSocial.db.profile.display.showMobileIndicators = value
 						end,
 					},
 					colorCodedCounts = {
@@ -71,11 +75,11 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 5,
 						get = function()
-							return self.db.profile.display.colorCodedCounts
+							return LibsSocial.db.profile.display.colorCodedCounts
 						end,
 						set = function(_, value)
-							self.db.profile.display.colorCodedCounts = value
-							self:UpdateDisplay()
+							LibsSocial.db.profile.display.colorCodedCounts = value
+							LibsSocial:UpdateDisplay()
 						end,
 					},
 				},
@@ -99,10 +103,10 @@ function LibsSocial:InitializeOptions()
 						max = 200,
 						step = 10,
 						get = function()
-							return self.db.profile.display.tooltip.extraWidth
+							return LibsSocial.db.profile.display.tooltip.extraWidth
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.extraWidth = value
+							LibsSocial.db.profile.display.tooltip.extraWidth = value
 						end,
 					},
 					sortField = {
@@ -118,10 +122,10 @@ function LibsSocial:InitializeOptions()
 							rank = 'Rank (Guild only)',
 						},
 						get = function()
-							return self.db.profile.display.tooltip.sortField
+							return LibsSocial.db.profile.display.tooltip.sortField
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.sortField = value
+							LibsSocial.db.profile.display.tooltip.sortField = value
 						end,
 					},
 					sortDirection = {
@@ -134,10 +138,10 @@ function LibsSocial:InitializeOptions()
 							desc = 'Descending (Z-A, High-Low)',
 						},
 						get = function()
-							return self.db.profile.display.tooltip.sortDirection
+							return LibsSocial.db.profile.display.tooltip.sortDirection
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.sortDirection = value
+							LibsSocial.db.profile.display.tooltip.sortDirection = value
 						end,
 					},
 					sectionsHeader = {
@@ -155,10 +159,10 @@ function LibsSocial:InitializeOptions()
 							activity = 'Activity (Group / Zone / Status)',
 						},
 						get = function()
-							return self.db.profile.display.tooltip.groupMode
+							return LibsSocial.db.profile.display.tooltip.groupMode
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.groupMode = value
+							LibsSocial.db.profile.display.tooltip.groupMode = value
 						end,
 					},
 					separateBNetSections = {
@@ -167,10 +171,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 11,
 						get = function()
-							return self.db.profile.display.tooltip.separateBNetSections
+							return LibsSocial.db.profile.display.tooltip.separateBNetSections
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.separateBNetSections = value
+							LibsSocial.db.profile.display.tooltip.separateBNetSections = value
 						end,
 					},
 					contentHeader = {
@@ -184,10 +188,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 21,
 						get = function()
-							return self.db.profile.display.tooltip.showLevels
+							return LibsSocial.db.profile.display.tooltip.showLevels
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.showLevels = value
+							LibsSocial.db.profile.display.tooltip.showLevels = value
 						end,
 					},
 					showZones = {
@@ -196,10 +200,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 22,
 						get = function()
-							return self.db.profile.display.tooltip.showZones
+							return LibsSocial.db.profile.display.tooltip.showZones
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.showZones = value
+							LibsSocial.db.profile.display.tooltip.showZones = value
 						end,
 					},
 					showRank = {
@@ -208,10 +212,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 23,
 						get = function()
-							return self.db.profile.display.tooltip.showRank
+							return LibsSocial.db.profile.display.tooltip.showRank
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.showRank = value
+							LibsSocial.db.profile.display.tooltip.showRank = value
 						end,
 					},
 					showNotes = {
@@ -220,10 +224,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 24,
 						get = function()
-							return self.db.profile.display.tooltip.showNotes
+							return LibsSocial.db.profile.display.tooltip.showNotes
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.showNotes = value
+							LibsSocial.db.profile.display.tooltip.showNotes = value
 						end,
 					},
 					showOfficerNotes = {
@@ -232,10 +236,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 25,
 						get = function()
-							return self.db.profile.display.tooltip.showOfficerNotes
+							return LibsSocial.db.profile.display.tooltip.showOfficerNotes
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.showOfficerNotes = value
+							LibsSocial.db.profile.display.tooltip.showOfficerNotes = value
 						end,
 					},
 					showBroadcasts = {
@@ -244,10 +248,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 26,
 						get = function()
-							return self.db.profile.display.tooltip.showBroadcasts
+							return LibsSocial.db.profile.display.tooltip.showBroadcasts
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.showBroadcasts = value
+							LibsSocial.db.profile.display.tooltip.showBroadcasts = value
 						end,
 					},
 					visualHeader = {
@@ -261,10 +265,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 31,
 						get = function()
-							return self.db.profile.display.tooltip.useStatusIcons
+							return LibsSocial.db.profile.display.tooltip.useStatusIcons
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.useStatusIcons = value
+							LibsSocial.db.profile.display.tooltip.useStatusIcons = value
 						end,
 					},
 					highlightSameZone = {
@@ -273,10 +277,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 32,
 						get = function()
-							return self.db.profile.display.tooltip.highlightSameZone
+							return LibsSocial.db.profile.display.tooltip.highlightSameZone
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.highlightSameZone = value
+							LibsSocial.db.profile.display.tooltip.highlightSameZone = value
 						end,
 					},
 					gameInfoHeader = {
@@ -290,10 +294,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 41,
 						get = function()
-							return self.db.profile.display.tooltip.showGameClient
+							return LibsSocial.db.profile.display.tooltip.showGameClient
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.showGameClient = value
+							LibsSocial.db.profile.display.tooltip.showGameClient = value
 						end,
 					},
 					showWowProject = {
@@ -302,10 +306,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 42,
 						get = function()
-							return self.db.profile.display.tooltip.showWowProject
+							return LibsSocial.db.profile.display.tooltip.showWowProject
 						end,
 						set = function(_, value)
-							self.db.profile.display.tooltip.showWowProject = value
+							LibsSocial.db.profile.display.tooltip.showWowProject = value
 						end,
 					},
 				},
@@ -322,10 +326,10 @@ function LibsSocial:InitializeOptions()
 						order = 1,
 						width = 'full',
 						get = function()
-							return self.db.profile.blocking.enabled
+							return LibsSocial.db.profile.blocking.enabled
 						end,
 						set = function(_, value)
-							self.db.profile.blocking.enabled = value
+							LibsSocial.db.profile.blocking.enabled = value
 						end,
 					},
 					blockHeader = {
@@ -339,13 +343,13 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 3,
 						disabled = function()
-							return not self.db.profile.blocking.enabled
+							return not LibsSocial.db.profile.blocking.enabled
 						end,
 						get = function()
-							return self.db.profile.blocking.duels
+							return LibsSocial.db.profile.blocking.duels
 						end,
 						set = function(_, value)
-							self.db.profile.blocking.duels = value
+							LibsSocial.db.profile.blocking.duels = value
 						end,
 					},
 					petDuels = {
@@ -354,13 +358,13 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 4,
 						disabled = function()
-							return not self.db.profile.blocking.enabled
+							return not LibsSocial.db.profile.blocking.enabled
 						end,
 						get = function()
-							return self.db.profile.blocking.petDuels
+							return LibsSocial.db.profile.blocking.petDuels
 						end,
 						set = function(_, value)
-							self.db.profile.blocking.petDuels = value
+							LibsSocial.db.profile.blocking.petDuels = value
 						end,
 					},
 					partyInvites = {
@@ -369,13 +373,13 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 5,
 						disabled = function()
-							return not self.db.profile.blocking.enabled
+							return not LibsSocial.db.profile.blocking.enabled
 						end,
 						get = function()
-							return self.db.profile.blocking.partyInvites
+							return LibsSocial.db.profile.blocking.partyInvites
 						end,
 						set = function(_, value)
-							self.db.profile.blocking.partyInvites = value
+							LibsSocial.db.profile.blocking.partyInvites = value
 						end,
 					},
 					friendRequests = {
@@ -384,13 +388,13 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 6,
 						disabled = function()
-							return not self.db.profile.blocking.enabled
+							return not LibsSocial.db.profile.blocking.enabled
 						end,
 						get = function()
-							return self.db.profile.blocking.friendRequests
+							return LibsSocial.db.profile.blocking.friendRequests
 						end,
 						set = function(_, value)
-							self.db.profile.blocking.friendRequests = value
+							LibsSocial.db.profile.blocking.friendRequests = value
 						end,
 					},
 					sharedQuests = {
@@ -399,13 +403,13 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 7,
 						disabled = function()
-							return not self.db.profile.blocking.enabled
+							return not LibsSocial.db.profile.blocking.enabled
 						end,
 						get = function()
-							return self.db.profile.blocking.sharedQuests
+							return LibsSocial.db.profile.blocking.sharedQuests
 						end,
 						set = function(_, value)
-							self.db.profile.blocking.sharedQuests = value
+							LibsSocial.db.profile.blocking.sharedQuests = value
 						end,
 					},
 				},
@@ -422,10 +426,10 @@ function LibsSocial:InitializeOptions()
 						order = 1,
 						width = 'full',
 						get = function()
-							return self.db.profile.autoAccept.enabled
+							return LibsSocial.db.profile.autoAccept.enabled
 						end,
 						set = function(_, value)
-							self.db.profile.autoAccept.enabled = value
+							LibsSocial.db.profile.autoAccept.enabled = value
 						end,
 					},
 					acceptHeader = {
@@ -439,13 +443,13 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 3,
 						disabled = function()
-							return not self.db.profile.autoAccept.enabled
+							return not LibsSocial.db.profile.autoAccept.enabled
 						end,
 						get = function()
-							return self.db.profile.autoAccept.partyFromFriends
+							return LibsSocial.db.profile.autoAccept.partyFromFriends
 						end,
 						set = function(_, value)
-							self.db.profile.autoAccept.partyFromFriends = value
+							LibsSocial.db.profile.autoAccept.partyFromFriends = value
 						end,
 					},
 					syncFromFriends = {
@@ -454,13 +458,13 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 4,
 						disabled = function()
-							return not self.db.profile.autoAccept.enabled
+							return not LibsSocial.db.profile.autoAccept.enabled
 						end,
 						get = function()
-							return self.db.profile.autoAccept.syncFromFriends
+							return LibsSocial.db.profile.autoAccept.syncFromFriends
 						end,
 						set = function(_, value)
-							self.db.profile.autoAccept.syncFromFriends = value
+							LibsSocial.db.profile.autoAccept.syncFromFriends = value
 						end,
 					},
 					inviteHeader = {
@@ -474,13 +478,13 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 11,
 						disabled = function()
-							return not self.db.profile.autoAccept.enabled
+							return not LibsSocial.db.profile.autoAccept.enabled
 						end,
 						get = function()
-							return self.db.profile.autoAccept.inviteKeywordEnabled
+							return LibsSocial.db.profile.autoAccept.inviteKeywordEnabled
 						end,
 						set = function(_, value)
-							self.db.profile.autoAccept.inviteKeywordEnabled = value
+							LibsSocial.db.profile.autoAccept.inviteKeywordEnabled = value
 						end,
 					},
 					inviteKeyword = {
@@ -489,13 +493,13 @@ function LibsSocial:InitializeOptions()
 						type = 'input',
 						order = 12,
 						disabled = function()
-							return not self.db.profile.autoAccept.enabled or not self.db.profile.autoAccept.inviteKeywordEnabled
+							return not LibsSocial.db.profile.autoAccept.enabled or not LibsSocial.db.profile.autoAccept.inviteKeywordEnabled
 						end,
 						get = function()
-							return self.db.profile.autoAccept.inviteKeyword
+							return LibsSocial.db.profile.autoAccept.inviteKeyword
 						end,
 						set = function(_, value)
-							self.db.profile.autoAccept.inviteKeyword = value
+							LibsSocial.db.profile.autoAccept.inviteKeyword = value
 						end,
 					},
 				},
@@ -517,10 +521,10 @@ function LibsSocial:InitializeOptions()
 						order = 2,
 						width = 'full',
 						get = function()
-							return self.db.profile.friendTreatment.guildAsFriends
+							return LibsSocial.db.profile.friendTreatment.guildAsFriends
 						end,
 						set = function(_, value)
-							self.db.profile.friendTreatment.guildAsFriends = value
+							LibsSocial.db.profile.friendTreatment.guildAsFriends = value
 						end,
 					},
 					communityAsFriends = {
@@ -530,10 +534,10 @@ function LibsSocial:InitializeOptions()
 						order = 3,
 						width = 'full',
 						get = function()
-							return self.db.profile.friendTreatment.communityAsFriends
+							return LibsSocial.db.profile.friendTreatment.communityAsFriends
 						end,
 						set = function(_, value)
-							self.db.profile.friendTreatment.communityAsFriends = value
+							LibsSocial.db.profile.friendTreatment.communityAsFriends = value
 						end,
 					},
 				},
@@ -549,10 +553,10 @@ function LibsSocial:InitializeOptions()
 						type = 'toggle',
 						order = 1,
 						get = function()
-							return self.db.profile.minimap.hide
+							return LibsSocial.db.profile.minimap.hide
 						end,
 						set = function(_, value)
-							self.db.profile.minimap.hide = value
+							LibsSocial.db.profile.minimap.hide = value
 							if value then
 								LibStub('LibDBIcon-1.0'):Hide("Lib's Social")
 							else
@@ -566,14 +570,14 @@ function LibsSocial:InitializeOptions()
 	}
 
 	-- Add profile options
-	options.args.profiles = LibStub('AceDBOptions-3.0'):GetOptionsTable(self.db)
+	options.args.profiles = LibStub('AceDBOptions-3.0'):GetOptionsTable(LibsSocial.db)
 	options.args.profiles.order = 100
 
 	AceConfig:RegisterOptionsTable('LibsSocial', options)
 	self.optionsFrame = AceConfigDialog:AddToBlizOptions('LibsSocial', "Lib's Social")
 end
 
-function LibsSocial:OpenOptions()
+function Options:OpenOptions()
 	-- Try to use Settings API first (Retail)
 	if Settings and Settings.OpenToCategory then
 		Settings.OpenToCategory(self.optionsFrame.name)

@@ -1,45 +1,24 @@
----@class LibsSocial
+---@class LibsSocial : AceAddon, AceEvent-3.0, AceConsole-3.0, AceBucket-3.0
 local ADDON_NAME, LibsSocial = ...
-
--- Create the addon using AceAddon
 LibsSocial = LibStub('AceAddon-3.0'):NewAddon(ADDON_NAME, 'AceEvent-3.0', 'AceConsole-3.0', 'AceBucket-3.0')
 _G.LibsSocial = LibsSocial
+
+LibsSocial:SetDefaultModuleLibraries('AceEvent-3.0', 'AceTimer-3.0')
 
 LibsSocial.version = '1.0.0'
 LibsSocial.addonName = "Lib's Social"
 
--- Module containers
-LibsSocial.Friends = {}
-LibsSocial.Blocking = {}
-LibsSocial.AutoAccept = {}
-LibsSocial.FriendTreatment = {}
-
 function LibsSocial:OnInitialize()
-	-- Initialize logger
 	if LibAT and LibAT.Logger then
 		self.logger = LibAT.Logger.RegisterAddon('LibsSocial')
 	end
 
-	-- Database is initialized in Core/Database.lua
-	self:InitializeDatabase()
-
-	-- Register slash commands
 	self:RegisterChatCommand('social', 'SlashCommand')
 	self:RegisterChatCommand('libssocial', 'SlashCommand')
 end
 
 function LibsSocial:OnEnable()
-	-- Initialize all systems
-	self:InitializeFriends()
-	self:InitializeBlocking()
-	self:InitializeAutoAccept()
-	self:InitializeFriendTreatment()
-	self:InitializeDataBroker()
-	self:InitializeMinimapButton()
-	self:InitializeOptions()
-
-	-- Register core events
-	self:RegisterEvents()
+	-- Modules auto-enable via Ace3 lifecycle
 
 	-- Register with Addon Compartment (10.x+ dropdown)
 	if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
@@ -89,10 +68,21 @@ function LibsSocial:SlashCommand(input)
 	end
 end
 
--- Logging helper
 function LibsSocial:Log(message, level)
 	level = level or 'info'
 	if self.logger and self.logger[level] then
 		self.logger[level](message)
+	end
+end
+
+function LibsSocial:UpdateDisplay()
+	if self.DataBroker then
+		self.DataBroker:UpdateDisplay()
+	end
+end
+
+function LibsSocial:OpenOptions()
+	if self.Options then
+		self.Options:OpenOptions()
 	end
 end

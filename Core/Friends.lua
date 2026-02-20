@@ -1,32 +1,32 @@
 ---@class LibsSocial
 local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 
-local Friends = {}
+---@class LibsSocial.Friends : AceModule
+local Friends = LibsSocial:NewModule('Friends')
 LibsSocial.Friends = Friends
 
--- Cached data
-Friends.characterFriends = {}
-Friends.battleNetFriends = {}
-Friends.battleNetInGame = {}
-Friends.battleNetAppOnly = {}
-Friends.guildMembers = {}
-Friends.communityMembers = {}
+function Friends:OnInitialize()
+	self.characterFriends = {}
+	self.battleNetFriends = {}
+	self.battleNetInGame = {}
+	self.battleNetAppOnly = {}
+	self.guildMembers = {}
+	self.communityMembers = {}
 
--- Counts
-Friends.numCharacterFriends = 0
-Friends.numCharacterOnline = 0
-Friends.numBattleNetFriends = 0
-Friends.numBattleNetOnline = 0
-Friends.numBattleNetInGame = 0
-Friends.numBattleNetAppOnly = 0
-Friends.numGuildMembers = 0
-Friends.numGuildOnline = 0
+	self.numCharacterFriends = 0
+	self.numCharacterOnline = 0
+	self.numBattleNetFriends = 0
+	self.numBattleNetOnline = 0
+	self.numBattleNetInGame = 0
+	self.numBattleNetAppOnly = 0
+	self.numGuildMembers = 0
+	self.numGuildOnline = 0
 
--- Player zone for same-zone highlighting
-Friends.playerZone = ''
+	self.playerZone = ''
+end
 
-function LibsSocial:InitializeFriends()
-	Friends:RefreshData()
+function Friends:OnEnable()
+	self:RefreshData()
 end
 
 function Friends:RefreshData()
@@ -77,8 +77,6 @@ function Friends:RefreshBattleNetFriends()
 	for i = 1, self.numBattleNetFriends do
 		local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
 		if accountInfo then
-			-- Find the best game account among multiple game accounts
-			-- Prefer: in-game with hasFocus > in-game > app with hasFocus > app
 			local numGameAccounts = C_BattleNet.GetFriendNumGameAccounts(i)
 			local bestGameInfo = accountInfo.gameAccountInfo
 			local bestIsApp = GameClients.IsAppClient(bestGameInfo and bestGameInfo.clientProgram)
@@ -88,7 +86,6 @@ function Friends:RefreshBattleNetFriends()
 					local gameAccountInfo = C_BattleNet.GetFriendGameAccountInfo(i, j)
 					if gameAccountInfo then
 						local isApp = GameClients.IsAppClient(gameAccountInfo.clientProgram)
-						-- Prefer game clients over app, and hasFocus within same tier
 						if (bestIsApp and not isApp) or (bestIsApp == isApp and gameAccountInfo.hasFocus) then
 							bestGameInfo = gameAccountInfo
 							bestIsApp = isApp
@@ -124,13 +121,11 @@ function Friends:RefreshBattleNetFriends()
 
 			self.battleNetFriends[accountInfo.bnetAccountID] = friendData
 
-			-- Also index by character name if available
 			if characterName then
 				local fullName = realmName and (characterName .. '-' .. realmName) or characterName
 				self.battleNetFriends[fullName] = friendData
 			end
 
-			-- Classify into in-game vs app-only for separated display
 			if accountInfo.isOnline then
 				if GameClients.IsAppClient(clientProgram) then
 					self.battleNetAppOnly[accountInfo.bnetAccountID] = friendData
@@ -183,8 +178,7 @@ function Friends:RefreshGuildMembers()
 	end
 end
 
----Check if a player is a character friend
----@param name string Player name
+---@param name string
 ---@return boolean
 function Friends:IsCharacterFriend(name)
 	if not name then
@@ -194,8 +188,7 @@ function Friends:IsCharacterFriend(name)
 	return self.characterFriends[shortName] ~= nil or self.characterFriends[name] ~= nil
 end
 
----Check if a player is a Battle.net friend
----@param name string Player name or Battle.net account ID
+---@param name string
 ---@return boolean
 function Friends:IsBattleNetFriend(name)
 	if not name then
@@ -205,8 +198,7 @@ function Friends:IsBattleNetFriend(name)
 	return self.battleNetFriends[shortName] ~= nil or self.battleNetFriends[name] ~= nil
 end
 
----Check if a player is a guild member
----@param name string Player name
+---@param name string
 ---@return boolean
 function Friends:IsGuildMember(name)
 	if not name then
@@ -216,51 +208,39 @@ function Friends:IsGuildMember(name)
 	return self.guildMembers[shortName] ~= nil or self.guildMembers[name] ~= nil
 end
 
----Check if a player is any type of friend
----@param name string Player name
+---@param name string
 ---@return boolean
 function Friends:IsFriend(name)
 	return self:IsCharacterFriend(name) or self:IsBattleNetFriend(name)
 end
 
----Check if a player should be treated as a friend (including guild/community)
----@param name string Player name
+---@param name string
 ---@return boolean
 function Friends:IsTreatedAsFriend(name)
-	-- Check if actual friend
 	if self:IsFriend(name) then
 		return true
 	end
 
 	local db = LibsSocial.db.profile.friendTreatment
 
-	-- Check guild treatment
 	if db.guildAsFriends and self:IsGuildMember(name) then
 		return true
 	end
 
-	-- Check community treatment (not implemented yet)
-	-- if db.communityAsFriends and self:IsCommunityMember(name) then
-	--     return true
-	-- end
-
 	return false
 end
 
----Get total online count
 ---@return number
 function Friends:GetTotalOnline()
 	return self.numCharacterOnline + self.numBattleNetOnline + self.numGuildOnline
 end
 
----Get total friend count
 ---@return number
 function Friends:GetTotalCount()
 	return self.numCharacterFriends + self.numBattleNetFriends + self.numGuildMembers
 end
 
----Get game client counts for online BNet friends (deduplicated by accountID)
----@return table<string, number> counts Keyed by display tag (e.g., "WoW", "D4", "OW"), values are counts
+---@return table<string, number>
 function Friends:GetGameCounts()
 	local GC = LibsSocial.GameClients
 	local counts = {}
