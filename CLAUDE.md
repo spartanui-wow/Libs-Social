@@ -10,7 +10,7 @@ This file provides guidance to Claude Code when working with the Libs-Social add
 
 ```
 Libs-Social/
-├── Libs-Social.toc              # Interface 120000, SavedVariables: LibsSocialDB
+├── Libs-Social.toc              # Interface 120005, SavedVariables: LibsSocialDB
 ├── Libs-Social.lua              # AceAddon main + LibAT Logger
 ├── Core/
 │   ├── Database.lua             # AceDB defaults and initialization
