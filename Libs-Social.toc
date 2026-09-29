@@ -33,3 +33,4 @@ UI\DataBroker.lua
 UI\Tooltip.lua
 UI\Options.lua
 UI\MinimapButton.lua
+UI\Setup.lua

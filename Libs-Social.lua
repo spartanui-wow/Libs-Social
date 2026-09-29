@@ -13,6 +13,9 @@ function LibsSocial:OnInitialize()
 		self.logger = LibAT.Logger.RegisterAddon('LibsSocial')
 	end
 
+	-- Before the Database module creates the saved variables, so Setup can spot a new install
+	self:RegisterSetup()
+
 	self:RegisterChatCommand('social', 'SlashCommand')
 	self:RegisterChatCommand('libssocial', 'SlashCommand')
 end
