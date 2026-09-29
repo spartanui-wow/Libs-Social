@@ -5,7 +5,7 @@
 ## Author: Wutname1
 ## Version: @project-version@
 ## SavedVariables: LibsSocialDB
-## OptionalDeps: Libs-DataBar, Libs-AddonTools
+## OptionalDeps: Libs-DataBar, LibsAddonTools
 ## Category: Data Broker
 ## Category-enUS: Data Broker
 ## Category-deDE: Daten-Broker
