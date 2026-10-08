@@ -13,7 +13,7 @@ function AutoAccept:HandlePartyInvite(name, ...)
 		return
 	end
 
-	if not LibsSocial.Friends:IsTreatedAsFriend(name) then
+	if not LibsSocial.IsReadable(name) or not LibsSocial.Friends:IsTreatedAsFriend(name) then
 		return
 	end
 
@@ -57,7 +57,7 @@ function AutoAccept:HandleLFGProposal()
 		return
 	end
 
-	local leaderName = UnitName('party1')
+	local leaderName = LibsSocial:UnitNameKey('party1')
 	if not leaderName then
 		return
 	end
@@ -78,6 +78,11 @@ function AutoAccept:HandleWhisper(message, sender, ...)
 		return
 	end
 
+	-- Whispers can arrive as secret text while chat is restricted
+	if not LibsSocial.IsReadable(message) or not LibsSocial.IsReadable(sender) or type(sender) ~= 'string' or sender == '' then
+		return
+	end
+
 	local keyword = db.inviteKeyword
 	if not keyword or keyword == '' then
 		return
@@ -91,11 +96,14 @@ function AutoAccept:HandleWhisper(message, sender, ...)
 		return
 	end
 
-	local shortName = Ambiguate(sender, 'none')
+	-- The full sender name: without the realm, a player from another realm cannot be invited
+	local InviteUnit = C_PartyInfo and C_PartyInfo.InviteUnit or InviteUnit
+	if not InviteUnit then
+		return
+	end
+	InviteUnit(sender)
 
-	InviteUnit(shortName)
-
-	LibsSocial:Log('Invited ' .. shortName .. ' (whispered keyword)', 'info')
+	LibsSocial:Log('Invited ' .. sender .. ' (whispered keyword)', 'info')
 end
 
 function AutoAccept:HandleSummon()

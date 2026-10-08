@@ -33,6 +33,9 @@ local SECTION_COLORS = {
 -- Status icon textures
 local STATUS_ICON_AFK = '|TInterface\\FriendsFrame\\StatusIcon-Away:0|t'
 local STATUS_ICON_DND = '|TInterface\\FriendsFrame\\StatusIcon-DnD:0|t'
+local GROUP_ICON = '|TInterface\\RaidFrame\\ReadyCheck-Ready:0|t'
+
+local BNET_CLIENT_WOW = BNET_CLIENT_WOW or 'WoW'
 
 function DataBroker:OnEnable()
 	self.socialLDB = LDB:NewDataObject("Lib's Social", {
@@ -57,12 +60,10 @@ function DataBroker:OnEnable()
 				end
 			end
 		end,
-		OnTooltipShow = function(tooltip)
-			-- Hijack: hide the GameTooltip and show our custom tooltip instead
-			local owner = tooltip:GetOwner()
-			tooltip:Hide()
-			local anchor = owner or tooltip
-			self:ShowCustomTooltip(anchor)
+		-- OnEnter instead of OnTooltipShow: displays show the GameTooltip again after OnTooltipShow
+		-- returns, which left an empty or hint-only game tooltip over this one
+		OnEnter = function(frame)
+			self:ShowCustomTooltip(frame)
 		end,
 		GetOptions = function()
 			return {
@@ -122,6 +123,24 @@ function DataBroker:OnEnable()
 
 	LibsSocial.dataObject = self.socialLDB
 	self:UpdateDisplay()
+
+	QTip.RegisterCallback(self, 'OnReleaseTooltip', 'OnReleaseTooltip')
+end
+
+function DataBroker:OnDisable()
+	QTip.UnregisterCallback(self, 'OnReleaseTooltip')
+	if self.activeTooltip and QTip:IsAcquiredTooltip(TOOLTIP_KEY) then
+		QTip:ReleaseTooltip(self.activeTooltip)
+	end
+end
+
+---@param _ string Event name
+---@param tooltip table The tooltip being released
+function DataBroker:OnReleaseTooltip(_, tooltip)
+	if tooltip == self.activeTooltip then
+		tooltip.IsMouseOver = nil
+		self.activeTooltip = nil
+	end
 end
 
 function DataBroker:UpdateDisplay()
@@ -276,17 +295,20 @@ end
 ---Get a group indicator prefix if the player is in the current group/raid
 ---@param name string Character name (may include realm)
 ---@return string indicator Green checkmark prefix or empty string
+local function IsInMyGroup(name)
+	if not name or name == '' or not IsInGroup() then
+		return false
+	end
+
+	-- Try both the raw name and the short version
+	local short = LibsSocial:ShortName(name)
+	return (UnitInParty(short) or UnitInRaid(short) or UnitInParty(name) or UnitInRaid(name)) and true or false
+end
+
 local function GetGroupIndicator(name)
-	if not name or name == '' then
-		return ''
+	if IsInMyGroup(name) then
+		return GROUP_ICON .. ' '
 	end
-
-	-- Try both the raw name and the ambiguated version
-	local short = Ambiguate(name, 'none')
-	if UnitInParty(short) or UnitInRaid(short) or UnitInParty(name) or UnitInRaid(name) then
-		return '|cff00ff00\226\156\147|r ' -- Green checkmark
-	end
-
 	return ''
 end
 
@@ -313,8 +335,9 @@ local function SortPlayers(players, sortField, sortDirection)
 			valA = a.rankIndex or 99
 			valB = b.rankIndex or 99
 		else -- 'name' default
-			valA = (a.name or a.characterName or ''):lower()
-			valB = (b.name or b.characterName or ''):lower()
+			-- Battle.net rows lead with the BattleTag, so that is what they are sorted by
+			valA = (a.battleTag or a.name or a.characterName or ''):lower()
+			valB = (b.battleTag or b.name or b.characterName or ''):lower()
 		end
 
 		if ascending then
@@ -332,13 +355,26 @@ end
 ---@param g number? Green
 ---@param b number? Blue
 local function AddFullLine(tooltip, text, r, g, b)
-	local row = tooltip:AddRow(text)
+	-- Span before setting the text: text set on a one-column cell widens the first column to fit it
+	local row = tooltip:AddRow()
 	local cell = row:GetCell(1)
 	cell:SetColSpan(2)
+	cell:SetText(text)
 	if r then
 		cell:SetTextColor(r, g, b)
 	end
 	return row
+end
+
+-- Copies of LibQTip-2.0 with the same version differ in what a cell script receives when no
+-- argument was given: some pass (frame, button), others (frame, nil, button), and whichever
+-- addon loads first decides. Always passing an argument gives (frame, arg, button) in both.
+local function OnPlayerRowMouseDown(frame, playerData, button)
+	if button == 'LeftButton' then
+		LibsSocial.PlayerMenu:Whisper(playerData)
+	elseif button == 'RightButton' then
+		LibsSocial.PlayerMenu:Show(playerData, frame)
+	end
 end
 
 ---Set up a player row with right-click context menu and hover highlight
@@ -347,34 +383,17 @@ end
 ---@param playerData table Player data for context menu
 ---@param numCols number Number of columns in the tooltip
 local function SetupPlayerRow(row, playerData, numCols)
-	-- LibQTip-2.0's Cell:SetScript injects a nil Parameter arg before the real script args.
-	-- So OnMouseDown receives (frame, nil, button) instead of (frame, button).
-	-- We use select(2, ...) to skip the injected arg and get the real button.
-	local handler = function(frame, ...)
-		local button = select(2, ...)
-		if button == 'LeftButton' then
-			-- Click-to-whisper
-			if playerData.accountID then
-				ChatFrame_SendSmartTell(playerData.accountName)
-			elseif playerData.name then
-				ChatFrame_SendTell(playerData.fullName or playerData.name)
-			end
-		elseif button == 'RightButton' then
-			if LibsSocial.PlayerMenu then
-				LibsSocial.PlayerMenu:Show(playerData, frame)
-			end
-		end
-	end
-
-	-- Set script on each cell so clicks are captured regardless of which column is clicked
-	-- Use OnMouseDown so the menu opens on press (OnMouseUp fires after release + includes extra args)
 	for i = 1, numCols do
-		local cell = row:GetCell(i)
-		if cell then
-			cell:SetScript('OnMouseDown', handler)
-		else
-			LibsSocial:Log('SetupPlayerRow: cell ' .. i .. ' is nil for row', 'warning')
-		end
+		row:GetCell(i):SetScript('OnMouseDown', OnPlayerRowMouseDown, playerData)
+	end
+end
+
+---Collapse or expand a section and rebuild the tooltip (argument order: see OnPlayerRowMouseDown)
+local function OnSectionHeaderMouseDown(_, sectionKey)
+	local collapsedSections = LibsSocial.db.profile.display.collapsedSections
+	collapsedSections[sectionKey] = not collapsedSections[sectionKey]
+	if DataBroker.activeAnchor then
+		DataBroker:ShowCustomTooltip(DataBroker.activeAnchor, true)
 	end
 end
 
@@ -399,27 +418,42 @@ local function AddSectionHeader(tooltip, text, countText, sectionKey, color)
 	local row = tooltip:AddRow(headerText, countText)
 	row:SetColor(0.15, 0.15, 0.15, 0.5)
 
-	-- Click to toggle collapse - set on cells since they intercept mouse events above rows
-	local toggleHandler = function()
-		LibsSocial.db.profile.display.collapsedSections[sectionKey] = not collapsed
-		-- Rebuild the tooltip
-		if DataBroker.activeAnchor then
-			DataBroker:ShowCustomTooltip(DataBroker.activeAnchor)
-		end
-	end
-
-	row:GetCell(1):SetScript('OnMouseDown', toggleHandler)
-	row:GetCell(2):SetScript('OnMouseDown', toggleHandler)
+	-- Set on cells since they intercept mouse events above rows
+	row:GetCell(1):SetScript('OnMouseDown', OnSectionHeaderMouseDown, sectionKey)
+	row:GetCell(2):SetScript('OnMouseDown', OnSectionHeaderMouseDown, sectionKey)
 
 	return collapsed
 end
 
+---Counts the open player menu as part of the tooltip, so moving onto a menu that sticks out of
+---the tooltip does not hide the tooltip (and the menu with it)
+---@param tooltip Frame
+---@return boolean
+local function TooltipIsMouseOver(tooltip, ...)
+	if QTip.FrameMetatable.__index.IsMouseOver(tooltip, ...) then
+		return true
+	end
+	local menuManager = Menu and Menu.GetManager and Menu.GetManager()
+	if menuManager and menuManager:IsAnyMenuOpen() then
+		local openMenu = menuManager:GetOpenMenu()
+		if openMenu and openMenu:IsMouseOver() then
+			return true
+		end
+	end
+	return false
+end
+
 ---Show the custom tooltip anchored to a frame
 ---@param anchor Frame The frame to anchor to
-function DataBroker:ShowCustomTooltip(anchor)
-	-- Release any existing tooltip
-	if QTip:IsAcquiredTooltip(TOOLTIP_KEY) then
-		QTip:ReleaseTooltip(self.activeTooltip)
+---@param keepScroll? boolean Keep the scroll position of the tooltip being replaced
+function DataBroker:ShowCustomTooltip(anchor, keepScroll)
+	local scrollValue
+	local previous = self.activeTooltip
+	if previous and QTip:IsAcquiredTooltip(TOOLTIP_KEY) then
+		if keepScroll and previous.Slider and previous.Slider:IsShown() then
+			scrollValue = previous.Slider:GetValue()
+		end
+		QTip:ReleaseTooltip(previous)
 	end
 
 	-- Store anchor for rebuilds (collapsible sections)
@@ -429,28 +463,8 @@ function DataBroker:ShowCustomTooltip(anchor)
 	local tooltip = QTip:AcquireTooltip(TOOLTIP_KEY, 2, 'LEFT', 'RIGHT')
 	self.activeTooltip = tooltip
 
-	-- Hook IsMouseOver so the auto-hide timer also pauses when a Blizzard context menu is open.
-	-- Without this, right-clicking a player row opens a MenuUtil context menu that can extend
-	-- outside the tooltip bounds - moving the mouse onto that menu causes the parent tooltip
-	-- to auto-hide (killing the context menu too).
-	if not tooltip._isMouseOverHooked then
-		local origIsMouseOver = tooltip.IsMouseOver
-		tooltip.IsMouseOver = function(self, ...)
-			if origIsMouseOver(self, ...) then
-				return true
-			end
-			-- If a Blizzard context menu is open and hovered, treat as "mouse over" to prevent auto-hide
-			local menuManager = Menu and Menu.GetManager()
-			if menuManager and menuManager:IsAnyMenuOpen() then
-				local openMenu = menuManager:GetOpenMenu()
-				if openMenu and openMenu:IsMouseOver() then
-					return true
-				end
-			end
-			return false
-		end
-		tooltip._isMouseOverHooked = true
-	end
+	-- Tooltip frames are pooled and shared with other addons; this is removed again on release
+	tooltip.IsMouseOver = TooltipIsMouseOver
 
 	-- Configure max height for scrolling
 	tooltip:SetMaxHeight(UIParent:GetHeight() * 0.6)
@@ -463,6 +477,11 @@ function DataBroker:ShowCustomTooltip(anchor)
 	tooltip:SetAutoHideDelay(0.25, anchor)
 	tooltip:UpdateLayout()
 	tooltip:Show()
+
+	if scrollValue and tooltip.Slider and tooltip.Slider:IsShown() then
+		local _, maxValue = tooltip.Slider:GetMinMaxValues()
+		tooltip.Slider:SetValue(math.min(scrollValue, maxValue))
+	end
 end
 
 ---Build all tooltip content sections
@@ -474,9 +493,14 @@ function DataBroker:BuildTooltipContent(tooltip)
 	local db = LibsSocial.db.profile
 	local ttDb = db.display.tooltip
 
-	-- Title
-	local titleRow = tooltip:AddHeadingRow("Lib's Social")
-	titleRow:GetCell(1):SetColSpan(2)
+	-- Title. Width settings only count when made before the text is set.
+	local titleCell = tooltip:AddHeadingRow():GetCell(1)
+	titleCell:SetColSpan(2)
+	local extraWidth = ttDb.extraWidth or 0
+	if extraWidth > 0 then
+		titleCell:SetMinWidth(300 + extraWidth)
+	end
+	titleCell:SetText("Lib's Social")
 
 	-- "Who's Playing What" summary line
 	local gameCounts = Friends:GetGameCounts()
@@ -485,7 +509,10 @@ function DataBroker:BuildTooltipContent(tooltip)
 		table.insert(sortedGames, { tag = tag, count = count })
 	end
 	table.sort(sortedGames, function(a, b)
-		return a.count > b.count
+		if a.count ~= b.count then
+			return a.count > b.count
+		end
+		return a.tag < b.tag
 	end)
 	if #sortedGames > 0 then
 		local parts = {}
@@ -525,16 +552,15 @@ function DataBroker:BuildTooltipContent(tooltip)
 			if not collapsed then
 				-- Collect online friends into sortable array
 				local onlineFriends = {}
-				for name, info in pairs(Friends.characterFriends) do
+				for _, info in pairs(Friends.characterFriends) do
 					if info.connected then
-						info._sortName = name
 						table.insert(onlineFriends, info)
 					end
 				end
 				SortPlayers(onlineFriends, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
 
 				for _, info in ipairs(onlineFriends) do
-					local name = info._sortName
+					local name = info.name
 					local groupIcon = GetGroupIndicator(name)
 					local coloredName = TT:ColorName(name, info.class)
 					local leftParts = { groupIcon .. coloredName }
@@ -543,7 +569,7 @@ function DataBroker:BuildTooltipContent(tooltip)
 						table.insert(leftParts, ' (' .. TT:ColorLevel(info.level or 0) .. ')')
 					end
 
-					local status = FormatStatus(false, false, info.mobile)
+					local status = FormatStatus(info.afk, info.dnd, info.mobile)
 					if status ~= '' then
 						table.insert(leftParts, status)
 					end
@@ -558,7 +584,7 @@ function DataBroker:BuildTooltipContent(tooltip)
 					end
 
 					SetupPlayerRow(row, {
-						name = name,
+						name = LibsSocial:ShortName(name),
 						fullName = name,
 						class = info.class,
 						level = info.level,
@@ -626,6 +652,7 @@ function DataBroker:BuildTooltipContent(tooltip)
 						name = info.name,
 						fullName = info.fullName,
 						class = info.classFileName or info.class,
+						className = info.class,
 						level = info.level,
 						rank = info.rank,
 					}, 2)
@@ -652,13 +679,33 @@ function DataBroker:BuildTooltipContent(tooltip)
 	tooltip:AddSeparator()
 	AddFullLine(tooltip, '|cffffff00Left Click:|r Friends  |cffffff00Right:|r Cycle Format  |cffffff00Middle:|r Guild', 0.5, 0.5, 0.5)
 	AddFullLine(tooltip, '|cffffff00Shift+Left:|r Options  |cffffff00Left-click player:|r Whisper  |cffffff00Right-click player:|r Menu', 0.5, 0.5, 0.5)
+end
 
-	-- Apply extra width if configured
-	local extraWidth = db.display.tooltip.extraWidth or 0
-	if extraWidth > 0 then
-		-- Set min width on title cell to force tooltip wider
-		titleRow:GetCell(1):SetMinWidth(300 + extraWidth)
-	end
+---True for a Battle.net friend in World of Warcraft on the same version of the game as the player
+---@param info table Friend data
+---@param GC table GameClients
+---@return boolean
+local function IsInMyGame(info, GC)
+	return info.clientProgram == BNET_CLIENT_WOW and GC.IsSameProject(info.wowProjectID)
+end
+
+---Player data handed to the row click handlers and the player menu for a Battle.net friend
+---@param info table Friend data
+---@return table
+local function BNetPlayerData(info)
+	return {
+		accountID = info.accountID,
+		accountName = info.accountName,
+		gameAccountID = info.gameAccountID,
+		characterName = info.characterName,
+		clientProgram = info.clientProgram,
+		wowProjectID = info.wowProjectID,
+		realm = info.realmName,
+		class = info.classFile or info.className,
+		className = info.className,
+		level = info.characterLevel,
+		battleTag = info.battleTag,
+	}
 end
 
 ---Build activity-grouped content: classifies all online players into activity buckets
@@ -683,21 +730,18 @@ function DataBroker:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
 	---Classify a single player into a bucket
 	---@param playerInfo table Normalized player info
 	local function ClassifyPlayer(playerInfo)
-		-- Non-WoW BNet friend (not app)
-		if playerInfo.clientProgram and playerInfo.clientProgram ~= 'WoW' and not GC.IsAppClient(playerInfo.clientProgram) then
-			table.insert(buckets[5].players, playerInfo)
-			return
-		end
-
 		-- Skip app-only clients
 		if playerInfo.clientProgram and GC.IsAppClient(playerInfo.clientProgram) then
 			return
 		end
 
-		-- Check if in player's group
-		local checkName = playerInfo.fullName or playerInfo.name or ''
-		local shortName = checkName ~= '' and Ambiguate(checkName, 'none') or ''
-		if shortName ~= '' and (UnitInParty(shortName) or UnitInRaid(shortName)) then
+		-- Another game, or another version of WoW: they cannot be in this group or zone
+		if playerInfo.source == 'bnet' and not IsInMyGame(playerInfo, GC) then
+			table.insert(buckets[5].players, playerInfo)
+			return
+		end
+
+		if IsInMyGroup(playerInfo.fullName or playerInfo.name) then
 			table.insert(buckets[1].players, playerInfo)
 			return
 		end
@@ -729,41 +773,41 @@ function DataBroker:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
 	end
 
 	-- Classify character friends
-	for name, info in pairs(Friends.characterFriends) do
+	for _, info in pairs(Friends.characterFriends) do
 		if info.connected then
 			ClassifyPlayer({
-				name = name,
-				fullName = name,
+				name = LibsSocial:ShortName(info.name),
+				fullName = info.name,
 				level = info.level,
 				class = info.class,
 				area = info.area,
-				isAFK = false,
-				isDND = false,
+				isAFK = info.afk,
+				isDND = info.dnd,
 				mobile = info.mobile,
 				source = 'friend',
 			})
 		end
 	end
 
-	-- Classify BNet friends (deduplicated by accountID)
-	local seenAccounts = {}
+	-- Classify BNet friends
 	for _, info in pairs(Friends.battleNetFriends) do
-		if info.isOnline and info.accountID and not seenAccounts[info.accountID] then
-			seenAccounts[info.accountID] = true
+		if info.isOnline then
 			ClassifyPlayer({
 				name = info.characterName,
 				fullName = info.characterName,
 				accountID = info.accountID,
-				accountName = info.accountName or info.battleTag,
+				accountName = info.accountName,
+				gameAccountID = info.gameAccountID,
 				battleTag = info.battleTag,
 				characterName = info.characterName,
 				realmName = info.realmName,
 				level = info.characterLevel,
 				className = info.className,
+				classFile = info.classFile,
 				areaName = info.areaName,
 				clientProgram = info.clientProgram,
 				isBnetAFK = info.isBnetAFK,
-				isBnetDND = info.isDND,
+				isBnetDND = info.isBnetDND,
 				isGameAFK = info.isGameAFK,
 				isGameBusy = info.isGameBusy,
 				wowProjectID = info.wowProjectID,
@@ -809,12 +853,14 @@ function DataBroker:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
 						local accountTag = (p.battleTag or p.accountName or 'Unknown'):gsub('#%d+$', '')
 						table.insert(leftParts, string.format('|cff%s%s|r', COLORS.realid, accountTag))
 						if p.characterName then
-							local charName = TT:ColorName(p.characterName, p.className)
+							local charName = TT:ColorName(p.characterName, p.classFile or p.className)
 							table.insert(leftParts, '  ' .. charName)
 						end
-						if p.clientProgram and p.clientProgram ~= 'WoW' and not GC.IsAppClient(p.clientProgram) then
+						if p.clientProgram and p.clientProgram ~= BNET_CLIENT_WOW then
 							local clientTag = GC.GetClientDisplayName(p.clientProgram)
 							table.insert(leftParts, string.format(' |cffaaaaaa[%s]|r', clientTag))
+						elseif ttDb.showWowProject and not GC.IsSameProject(p.wowProjectID) then
+							table.insert(leftParts, string.format(' |cffcccccc(%s)|r', GC.GetProjectLabel(p.wowProjectID)))
 						end
 					else
 						-- Character friend or guild member
@@ -845,23 +891,50 @@ function DataBroker:BuildActivityGroupedContent(tooltip, Friends, TT, GC, ttDb)
 						row:GetCell(2):SetTextColor(zr, zg, zb)
 					end
 
-					-- Setup player row interactions
-					SetupPlayerRow(row, {
-						accountID = p.accountID,
-						accountName = p.accountName,
-						characterName = p.characterName,
-						name = p.name,
-						fullName = p.fullName,
-						realm = p.realmName,
-						class = p.classFileName or p.className or p.class,
-						level = p.level,
-						rank = p.rank,
-						battleTag = p.battleTag,
-					}, 2)
+					if p.accountID then
+						SetupPlayerRow(row, BNetPlayerData({
+							accountID = p.accountID,
+							accountName = p.accountName,
+							gameAccountID = p.gameAccountID,
+							characterName = p.characterName,
+							clientProgram = p.clientProgram,
+							wowProjectID = p.wowProjectID,
+							realmName = p.realmName,
+							classFile = p.classFile,
+							className = p.className,
+							characterLevel = p.level,
+							battleTag = p.battleTag,
+						}), 2)
+					else
+						SetupPlayerRow(row, {
+							name = p.name,
+							fullName = p.fullName,
+							class = p.classFileName or p.class,
+							className = p.class,
+							level = p.level,
+							rank = p.rank,
+						}, 2)
+					end
 				end
 			end
 		end
 	end
+end
+
+---Online Battle.net friends from one of the friend tables, in the configured order
+---@param friendTable table<number, table>
+---@param ttDb table Tooltip settings
+---@param onlineOnly? boolean
+---@return table[]
+local function SortedBNetFriends(friendTable, ttDb, onlineOnly)
+	local list = {}
+	for _, info in pairs(friendTable) do
+		if not onlineOnly or info.isOnline then
+			table.insert(list, info)
+		end
+	end
+	SortPlayers(list, ttDb.sortField or 'name', ttDb.sortDirection or 'asc')
+	return list
 end
 
 ---Build BNet In-Game section
@@ -879,7 +952,7 @@ function DataBroker:BuildBNetInGameSection(tooltip, Friends, TT, GC, ttDb)
 	local collapsed = AddSectionHeader(tooltip, 'Battle.net (In Game)', string.format('|cff%s%d|r', COLORS.online, Friends.numBattleNetInGame), 'battleNetInGame', SECTION_COLORS.bnet)
 
 	if not collapsed then
-		for _, info in pairs(Friends.battleNetInGame) do
+		for _, info in ipairs(SortedBNetFriends(Friends.battleNetInGame, ttDb)) do
 			self:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 		end
 	end
@@ -900,7 +973,7 @@ function DataBroker:BuildBNetAppSection(tooltip, Friends, TT, GC, ttDb)
 	local collapsed = AddSectionHeader(tooltip, 'Battle.net (App)', string.format('|cff%s%d|r', COLORS.offline, Friends.numBattleNetAppOnly), 'battleNetApp', SECTION_COLORS.bnet)
 
 	if not collapsed then
-		for _, info in pairs(Friends.battleNetAppOnly) do
+		for _, info in ipairs(SortedBNetFriends(Friends.battleNetAppOnly, ttDb)) do
 			self:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 		end
 	end
@@ -923,13 +996,8 @@ function DataBroker:BuildBNetCombinedSection(tooltip, Friends, TT, GC, ttDb)
 	)
 
 	if not collapsed then
-		-- Deduplicate: only process by accountID
-		local seen = {}
-		for _, info in pairs(Friends.battleNetFriends) do
-			if info.isOnline and info.accountID and not seen[info.accountID] then
-				seen[info.accountID] = true
-				self:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
-			end
+		for _, info in ipairs(SortedBNetFriends(Friends.battleNetFriends, ttDb, true)) do
+			self:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 		end
 	end
 end
@@ -941,15 +1009,15 @@ end
 ---@param ttDb table Tooltip settings
 ---@param info table Friend data
 function DataBroker:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
-	local accountTag = info.battleTag or info.accountName or 'Unknown'
-	accountTag = accountTag:gsub('#%d+$', '')
+	local accountTag = (info.battleTag or info.accountName or 'Unknown'):gsub('#%d+$', '')
+	local inMyGame = IsInMyGame(info, GC)
 
-	local groupIcon = info.characterName and GetGroupIndicator(info.characterName) or ''
+	local groupIcon = inMyGame and GetGroupIndicator(info.characterName) or ''
 	local leftParts = { groupIcon .. string.format('|cff%s%s|r', COLORS.realid, accountTag) }
 
 	-- Character info for WoW players
 	if info.characterName then
-		local charName = TT:ColorName(info.characterName, info.className)
+		local charName = TT:ColorName(info.characterName, info.classFile or info.className)
 		table.insert(leftParts, '  ' .. charName)
 
 		if ttDb.showLevels and info.characterLevel and info.characterLevel > 0 then
@@ -958,18 +1026,14 @@ function DataBroker:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 	end
 
 	-- Game client tag for non-WoW games
-	if ttDb.showGameClient and info.clientProgram and info.clientProgram ~= 'WoW' and not GC.IsAppClient(info.clientProgram) then
+	if ttDb.showGameClient and info.clientProgram and info.clientProgram ~= BNET_CLIENT_WOW and not GC.IsAppClient(info.clientProgram) then
 		local clientTag = GC.GetClientDisplayName(info.clientProgram)
 		table.insert(leftParts, string.format(' |cffaaaaaa[%s]|r', clientTag))
 	end
 
 	-- WoW project label (only if different from player's)
-	if ttDb.showWowProject and info.clientProgram == 'WoW' and info.wowProjectID then
-		local myProject = WOW_PROJECT_ID
-		if info.wowProjectID ~= myProject then
-			local label = GC.GetProjectLabel(info.wowProjectID)
-			table.insert(leftParts, string.format(' |cffcccccc(%s)|r', label))
-		end
+	if ttDb.showWowProject and info.clientProgram == BNET_CLIENT_WOW and not GC.IsSameProject(info.wowProjectID) then
+		table.insert(leftParts, string.format(' |cffcccccc(%s)|r', GC.GetProjectLabel(info.wowProjectID)))
 	end
 
 	-- Status
@@ -982,11 +1046,15 @@ function DataBroker:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 
 	local leftStr = table.concat(leftParts)
 
-	-- Zone (right side)
+	-- Zone (right side). A zone of the same name in another game version is not the player's zone.
 	local rightStr = nil
 	local zr, zg, zb = 0.7, 0.7, 0.7
 	if ttDb.showZones and info.areaName and info.areaName ~= '' then
-		rightStr, zr, zg, zb = FormatZone(info.areaName)
+		if inMyGame then
+			rightStr, zr, zg, zb = FormatZone(info.areaName)
+		else
+			rightStr = info.areaName
+		end
 	end
 
 	local row = tooltip:AddRow(leftStr, rightStr)
@@ -994,15 +1062,7 @@ function DataBroker:AddBNetFriendLine(tooltip, TT, GC, ttDb, info)
 		row:GetCell(2):SetTextColor(zr, zg, zb)
 	end
 
-	SetupPlayerRow(row, {
-		accountID = info.accountID,
-		accountName = info.accountName or info.battleTag,
-		characterName = info.characterName,
-		realm = info.realmName,
-		class = info.className,
-		level = info.characterLevel,
-		battleTag = info.battleTag,
-	}, 2)
+	SetupPlayerRow(row, BNetPlayerData(info), 2)
 
 	-- Broadcast message
 	if ttDb.showBroadcasts and info.customMessage and info.customMessage ~= '' then

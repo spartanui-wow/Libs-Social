@@ -10,8 +10,8 @@ This file provides guidance to Claude Code when working with the Libs-Social add
 
 ```
 Libs-Social/
-├── Libs-Social.toc              # Interface 120005, SavedVariables: LibsSocialDB
-├── Libs-Social.lua              # AceAddon main + LibAT Logger
+├── Libs-Social.toc              # Retail, Forever, Mists, Titan, TBC Anniversary, Classic Era
+├── Libs-Social.lua              # AceAddon main + LibAT Logger, client detection, name keys (NameKey)
 ├── Core/
 │   ├── Database.lua             # AceDB defaults and initialization
 │   ├── Events.lua               # Social event handlers (friend list, BNet, guild)
@@ -36,10 +36,17 @@ Libs-Social/
 Uses LibQTip-2.0 for multi-column, scrollable tooltips with per-row click handlers and auto-hide.
 - **LibQTip-2.0 API**: `AcquireTooltip` / `ReleaseTooltip` pattern, `SmartAnchorTo`, `SetAutoHideDelay`, `SetMaxHeight` for scrolling
 - **Collapsible sections**: Click headers to collapse/expand; persisted in `db.profile.display.collapsedSections`
-- **Right-click menus**: Per-row `OnMouseUp` scripts → `PlayerMenu:Show(playerData, anchor)` — shows player info + actions
+- **Row clicks**: per-cell `OnMouseDown` set with `cell:SetScript('OnMouseDown', handler, playerData)`. Always pass the argument: copies of LibQTip-2.0 with the same version disagree on the argument order otherwise. Left click whispers (`PlayerMenu:Whisper`), right click opens `PlayerMenu:Show(playerData, anchor)`
+- **Opened from `OnEnter`**, not `OnTooltipShow` (displays show the GameTooltip again after `OnTooltipShow`)
+- **Full-width lines**: span the cell before setting its text, or the first column grows to the text's width
 - **Sections**: BNet In-Game, BNet App (or combined), Character Friends, Guild
 - **Toggleable features**: Levels, notes, officer notes, zones, rank, broadcasts, game client, WoW project, same-zone highlighting, status icons
 - **Event bucketing**: AceBucket-3.0 (1s bucket) for friend/guild event coalescing
+
+### Names
+- Friend, Battle.net character and guild tables are keyed by `LibsSocial:NameKey(name, realm)`: `Name-Realm` (realm without spaces, own realm added when missing) or, where characters have a surname (WoW Forever, `RegionalUniqueNamesEnabled()`), `First Last` with `-` read as a space. Never compare names with `Ambiguate` or by splitting on `-`.
+- WoW Forever: `LibsSocial.IsForever` (project 18 or interface 16000-19999), `LibsSocial.ProjectID` is the player's real project id for comparing with Battle.net `wowProjectID`.
+- Whisper with `ChatFrameUtil.SendTell` / `SendBNetTell`, invite with `C_PartyInfo.InviteUnit` / `C_BattleNet.InviteFriend(gameAccountID)`.
 
 ### Friend Treatment System
 - `IsTreatedAsFriend(name)` checks: character friend OR BNet friend OR guild member (if `guildAsFriends` enabled)

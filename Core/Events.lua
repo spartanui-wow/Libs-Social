@@ -31,8 +31,12 @@ function Events:OnEnable()
 	self:RegisterEvent('LFG_PROPOSAL_SHOW', 'OnLFGProposalShow')
 	self:RegisterEvent('CHAT_MSG_WHISPER', 'OnWhisper')
 
-	-- Player login
-	self:RegisterEvent('PLAYER_LOGIN', 'OnPlayerLogin')
+	-- Modules are enabled while PLAYER_LOGIN is being sent, so registering for it here is too late
+	if IsLoggedIn() then
+		self:OnPlayerLogin()
+	else
+		self:RegisterEvent('PLAYER_LOGIN', 'OnPlayerLogin')
+	end
 	self:RegisterEvent('PLAYER_ENTERING_WORLD', 'OnPlayerEnteringWorld')
 end
 

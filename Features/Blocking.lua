@@ -13,6 +13,11 @@ function Blocking:HandleDuel(name)
 		return
 	end
 
+	-- A name we cannot read cannot be checked against the friend list, so leave the request alone
+	if not LibsSocial.IsReadable(name) then
+		return
+	end
+
 	if LibsSocial.Friends:IsTreatedAsFriend(name) then
 		LibsSocial:Log('Duel from friend ' .. name .. ' - not blocking', 'debug')
 		return
@@ -32,6 +37,10 @@ function Blocking:HandlePetDuel(name)
 		return
 	end
 
+	if not LibsSocial.IsReadable(name) then
+		return
+	end
+
 	if LibsSocial.Friends:IsTreatedAsFriend(name) then
 		LibsSocial:Log('Pet duel from friend ' .. name .. ' - not blocking', 'debug')
 		return
@@ -48,6 +57,10 @@ function Blocking:HandlePartyInvite(name, ...)
 	local db = LibsSocial.db.profile.blocking
 
 	if not db.enabled or not db.partyInvites then
+		return
+	end
+
+	if not LibsSocial.IsReadable(name) then
 		return
 	end
 
@@ -91,6 +104,10 @@ function Blocking:HandleSharedQuest(name, questTitle)
 		return
 	end
 
+	if not LibsSocial.IsReadable(name) then
+		return
+	end
+
 	if LibsSocial.Friends:IsTreatedAsFriend(name) then
 		LibsSocial:Log('Shared quest from friend ' .. name .. ' - not blocking', 'debug')
 		return
@@ -99,5 +116,5 @@ function Blocking:HandleSharedQuest(name, questTitle)
 	DeclineQuest()
 	StaticPopup_Hide('QUEST_ACCEPT')
 
-	LibsSocial:Log('Blocked shared quest "' .. questTitle .. '" from ' .. name, 'info')
+	LibsSocial:Log('Blocked shared quest "' .. tostring(questTitle) .. '" from ' .. name, 'info')
 end

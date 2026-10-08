@@ -45,19 +45,21 @@ end
 ---@param rootDescription table Menu root description
 ---@param playerData table Player data
 local function AddPlayerInfoLines(rootDescription, playerData)
-	-- Realm
-	local realm = playerData.realm
-	if (not realm or realm == '') and playerData.fullName and playerData.fullName:find('-') then
-		realm = playerData.fullName:match('-(.+)$')
-	end
-	if realm and realm ~= '' then
-		rootDescription:CreateTitle('Realm: ' .. realm)
+	-- Characters have a last name instead of a realm on some clients, so "First-Last" holds no realm
+	if not LibsSocial:UsesSurnames() then
+		local realm = playerData.realm
+		if (not realm or realm == '') and playerData.fullName and playerData.fullName:find('-', 1, true) then
+			realm = playerData.fullName:match('-(.+)$')
+		end
+		if realm and realm ~= '' then
+			rootDescription:CreateTitle('Realm: ' .. realm)
+		end
 	end
 
 	-- Class
-	if playerData.class and playerData.class ~= '' then
-		local className = playerData.class
-		local color = RAID_CLASS_COLORS[className:upper()]
+	local className = playerData.className or playerData.class
+	if className and className ~= '' then
+		local color = LibsSocial.Tooltip:GetClassColor(playerData.class or className)
 		if color then
 			rootDescription:CreateTitle('Class: ' .. string.format('|cff%02x%02x%02x%s|r', color.r * 255, color.g * 255, color.b * 255, className))
 		else
@@ -81,6 +83,72 @@ local function AddPlayerInfoLines(rootDescription, playerData)
 	end
 end
 
+local BNET_CLIENT_WOW = BNET_CLIENT_WOW or 'WoW'
+
+---True when the player can whisper or invite this Battle.net friend's character in this game
+---@param playerData table
+---@return boolean
+local function IsReachableCharacter(playerData)
+	return playerData.characterName ~= nil
+		and playerData.characterName ~= ''
+		and playerData.clientProgram == BNET_CLIENT_WOW
+		and LibsSocial.GameClients.IsSameProject(playerData.wowProjectID)
+end
+
+---Open a whisper to a player (Battle.net whisper for Battle.net friends)
+---@param playerData table Player data from a tooltip row
+function PlayerMenu:Whisper(playerData)
+	local util = ChatFrameUtil
+	if playerData.accountID then
+		local target = playerData.accountName
+		if not target or target == '' then
+			return
+		end
+		if util and util.SendBNetTell then
+			util.SendBNetTell(target)
+		elseif ChatFrame_SendBNetTell then
+			ChatFrame_SendBNetTell(target)
+		end
+		return
+	end
+
+	local name = playerData.fullName or playerData.name
+	if not name or name == '' then
+		return
+	end
+	if util and util.SendTell then
+		util.SendTell(name)
+	elseif ChatFrame_SendTell then
+		ChatFrame_SendTell(name)
+	end
+end
+
+---Invite a player to the group
+---@param playerData table Player data from a tooltip row
+function PlayerMenu:Invite(playerData)
+	if playerData.accountID then
+		local gameAccountID = playerData.gameAccountID
+		if not gameAccountID then
+			return
+		end
+		if C_BattleNet and C_BattleNet.InviteFriend then
+			C_BattleNet.InviteFriend(gameAccountID)
+		elseif BNInviteFriend then
+			BNInviteFriend(gameAccountID)
+		end
+		return
+	end
+
+	local name = playerData.fullName or playerData.name
+	if not name or name == '' then
+		return
+	end
+	local InviteUnit = C_PartyInfo and C_PartyInfo.InviteUnit or InviteUnit
+	if InviteUnit then
+		InviteUnit(name)
+	end
+end
+
 ---Show context menu for a player (character friend, BNet friend, or guild member)
 ---@param playerData table Player data from tooltip row
 ---@param anchor Frame Frame to anchor menu to
@@ -91,7 +159,7 @@ function PlayerMenu:Show(playerData, anchor)
 
 	if playerData.accountID then
 		-- BNet friend
-		local displayName = playerData.accountName or 'Unknown'
+		local displayName = playerData.accountName or playerData.battleTag or 'Unknown'
 		local characterName = playerData.characterName
 
 		MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
@@ -103,12 +171,12 @@ function PlayerMenu:Show(playerData, anchor)
 
 			-- Actions
 			rootDescription:CreateButton('Whisper', function()
-				ChatFrame_SendSmartTell(displayName)
+				PlayerMenu:Whisper(playerData)
 			end)
 
-			if characterName and characterName ~= '' then
+			if IsReachableCharacter(playerData) and playerData.gameAccountID then
 				rootDescription:CreateButton('Invite to Party', function()
-					BNInviteFriend(playerData.accountID)
+					PlayerMenu:Invite(playerData)
 				end)
 			end
 
@@ -134,7 +202,7 @@ function PlayerMenu:Show(playerData, anchor)
 		end
 
 		MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
-			rootDescription:CreateTitle(name)
+			rootDescription:CreateTitle(playerData.name or name)
 
 			-- Player info
 			AddPlayerInfoLines(rootDescription, playerData)
@@ -142,16 +210,16 @@ function PlayerMenu:Show(playerData, anchor)
 
 			-- Actions
 			rootDescription:CreateButton('Whisper', function()
-				ChatFrame_SendTell(name)
+				PlayerMenu:Whisper(playerData)
 			end)
 
 			rootDescription:CreateButton('Invite to Party', function()
-				InviteUnit(name)
+				PlayerMenu:Invite(playerData)
 			end)
 
 			if IsInRaid() or (IsInGroup() and (UnitIsGroupLeader('player') or UnitIsGroupAssistant('player'))) then
 				rootDescription:CreateButton('Invite to Raid', function()
-					InviteUnit(name)
+					PlayerMenu:Invite(playerData)
 				end)
 			end
 

@@ -43,11 +43,21 @@ GameClients.APP_CLIENTS = {
 GameClients.WOW_PROJECT_NAMES = {
 	[1] = 'Retail', -- WOW_PROJECT_MAINLINE
 	[2] = 'Classic Era', -- WOW_PROJECT_CLASSIC
+	[3] = 'Plunderstorm', -- WOW_PROJECT_WOWLABS
 	[5] = 'TBC Classic', -- WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 	[11] = 'Wrath Classic', -- WOW_PROJECT_WRATH_CLASSIC
 	[14] = 'Cata Classic', -- WOW_PROJECT_CATACLYSM_CLASSIC
+	[18] = 'Forever', -- WOW_PROJECT_CAMELOT
 	[19] = 'Mists Classic', -- WOW_PROJECT_MISTS_CLASSIC
 }
+
+---True when a WoW friend plays the same version of the game as the player, so they can group,
+---whisper by character name and share zones
+---@param wowProjectID number?
+---@return boolean
+function GameClients.IsSameProject(wowProjectID)
+	return wowProjectID == nil or wowProjectID == LibsSocial.ProjectID
+end
 
 ---Get the display name for a BNet game client
 ---@param clientProgram string? The clientProgram from game account info

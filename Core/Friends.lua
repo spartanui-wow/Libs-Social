@@ -5,12 +5,17 @@ local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 local Friends = LibsSocial:NewModule('Friends')
 LibsSocial.Friends = Friends
 
+local BNET_CLIENT_WOW = BNET_CLIENT_WOW or 'WoW'
+
 function Friends:OnInitialize()
+	-- Keyed by LibsSocial:NameKey, so every spelling of a name finds the same entry
 	self.characterFriends = {}
+	self.battleNetCharacters = {}
+	self.guildMembers = {}
+	-- Keyed by Battle.net account ID
 	self.battleNetFriends = {}
 	self.battleNetInGame = {}
 	self.battleNetAppOnly = {}
-	self.guildMembers = {}
 	self.communityMembers = {}
 
 	self.numCharacterFriends = 0
@@ -48,8 +53,9 @@ function Friends:RefreshCharacterFriends()
 
 	for i = 1, self.numCharacterFriends do
 		local info = C_FriendList.GetFriendInfoByIndex(i)
-		if info then
-			self.characterFriends[info.name] = {
+		local key = info and LibsSocial:NameKey(info.name)
+		if key then
+			self.characterFriends[key] = {
 				name = info.name,
 				level = info.level,
 				class = info.className,
@@ -57,13 +63,32 @@ function Friends:RefreshCharacterFriends()
 				connected = info.connected,
 				mobile = info.mobile,
 				notes = info.notes,
+				afk = info.afk,
+				dnd = info.dnd,
 			}
 		end
 	end
 end
 
+---@param gameInfo table? BNetGameAccountInfo
+---@return string|nil classFile
+local function GetGameAccountClassFile(gameInfo)
+	if not gameInfo then
+		return nil
+	end
+	if gameInfo.classFilename and gameInfo.classFilename ~= '' then
+		return gameInfo.classFilename
+	end
+	if gameInfo.classID and GetClassInfo then
+		local _, classFile = GetClassInfo(gameInfo.classID)
+		return classFile
+	end
+	return nil
+end
+
 function Friends:RefreshBattleNetFriends()
 	wipe(self.battleNetFriends)
+	wipe(self.battleNetCharacters)
 	wipe(self.battleNetInGame)
 	wipe(self.battleNetAppOnly)
 
@@ -77,7 +102,7 @@ function Friends:RefreshBattleNetFriends()
 	for i = 1, self.numBattleNetFriends do
 		local accountInfo = C_BattleNet.GetFriendAccountInfo(i)
 		if accountInfo then
-			local numGameAccounts = C_BattleNet.GetFriendNumGameAccounts(i)
+			local numGameAccounts = C_BattleNet.GetFriendNumGameAccounts(i) or 0
 			local bestGameInfo = accountInfo.gameAccountInfo
 			local bestIsApp = GameClients.IsAppClient(bestGameInfo and bestGameInfo.clientProgram)
 
@@ -95,6 +120,9 @@ function Friends:RefreshBattleNetFriends()
 			end
 
 			local characterName = bestGameInfo and bestGameInfo.characterName
+			if characterName == '' then
+				characterName = nil
+			end
 			local realmName = bestGameInfo and bestGameInfo.realmName
 			local clientProgram = bestGameInfo and bestGameInfo.clientProgram
 
@@ -105,10 +133,12 @@ function Friends:RefreshBattleNetFriends()
 				isOnline = accountInfo.isOnline,
 				isBnetAFK = accountInfo.isAFK,
 				isBnetDND = accountInfo.isDND,
+				gameAccountID = bestGameInfo and bestGameInfo.gameAccountID,
 				characterName = characterName,
 				realmName = realmName,
 				characterLevel = bestGameInfo and bestGameInfo.characterLevel,
 				className = bestGameInfo and bestGameInfo.className,
+				classFile = GetGameAccountClassFile(bestGameInfo),
 				areaName = bestGameInfo and bestGameInfo.areaName,
 				isGameBusy = bestGameInfo and bestGameInfo.isGameBusy,
 				isGameAFK = bestGameInfo and bestGameInfo.isGameAFK,
@@ -121,9 +151,12 @@ function Friends:RefreshBattleNetFriends()
 
 			self.battleNetFriends[accountInfo.bnetAccountID] = friendData
 
-			if characterName then
-				local fullName = realmName and (characterName .. '-' .. realmName) or characterName
-				self.battleNetFriends[fullName] = friendData
+			-- Only a WoW character name can be matched against players in the world
+			if characterName and clientProgram == BNET_CLIENT_WOW then
+				local key = LibsSocial:NameKey(characterName, realmName)
+				if key then
+					self.battleNetCharacters[key] = friendData
+				end
 			end
 
 			if accountInfo.isOnline then
@@ -152,12 +185,12 @@ function Friends:RefreshGuildMembers()
 	self.numGuildOnline = 0
 
 	for i = 1, self.numGuildMembers do
-		local name, rank, rankIndex, level, class, zone, note, officernote, online, status, classFileName, achievementPoints, achievementRank, isMobile = GetGuildRosterInfo(i)
-		if name then
-			local shortName = Ambiguate(name, 'none')
-			self.guildMembers[shortName] = {
+		local name, rank, rankIndex, level, class, zone, note, officernote, online, status, classFileName, _, _, isMobile = GetGuildRosterInfo(i)
+		local key = LibsSocial:NameKey(name)
+		if key then
+			self.guildMembers[key] = {
 				fullName = name,
-				name = shortName,
+				name = LibsSocial:ShortName(name),
 				rank = rank,
 				rankIndex = rankIndex,
 				level = level,
@@ -181,31 +214,22 @@ end
 ---@param name string
 ---@return boolean
 function Friends:IsCharacterFriend(name)
-	if not name then
-		return false
-	end
-	local shortName = Ambiguate(name, 'none')
-	return self.characterFriends[shortName] ~= nil or self.characterFriends[name] ~= nil
+	local key = LibsSocial:NameKey(name)
+	return key ~= nil and self.characterFriends[key] ~= nil
 end
 
 ---@param name string
 ---@return boolean
 function Friends:IsBattleNetFriend(name)
-	if not name then
-		return false
-	end
-	local shortName = Ambiguate(name, 'none')
-	return self.battleNetFriends[shortName] ~= nil or self.battleNetFriends[name] ~= nil
+	local key = LibsSocial:NameKey(name)
+	return key ~= nil and self.battleNetCharacters[key] ~= nil
 end
 
 ---@param name string
 ---@return boolean
 function Friends:IsGuildMember(name)
-	if not name then
-		return false
-	end
-	local shortName = Ambiguate(name, 'none')
-	return self.guildMembers[shortName] ~= nil or self.guildMembers[name] ~= nil
+	local key = LibsSocial:NameKey(name)
+	return key ~= nil and self.guildMembers[key] ~= nil
 end
 
 ---@param name string
@@ -244,11 +268,9 @@ end
 function Friends:GetGameCounts()
 	local GC = LibsSocial.GameClients
 	local counts = {}
-	local seen = {}
 
 	for _, info in pairs(self.battleNetFriends) do
-		if info.isOnline and info.accountID and not seen[info.accountID] then
-			seen[info.accountID] = true
+		if info.isOnline then
 			local client = info.clientProgram
 			if client and client ~= '' then
 				local tag = GC.GetClientDisplayName(client)

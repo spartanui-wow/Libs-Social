@@ -8,22 +8,62 @@ local LibsSocial = LibStub('AceAddon-3.0'):GetAddon('Libs-Social')
 local Tooltip = {}
 LibsSocial.Tooltip = Tooltip
 
--- Tooltip helper functions
+local classFileByLocalName
+
+---Friend list and Battle.net data give the class in the player's language ("Todesritter"),
+---while RAID_CLASS_COLORS is keyed by the English file name ("DEATHKNIGHT")
+---@param class string
+---@return string|nil classFile
+local function GetClassFile(class)
+	if RAID_CLASS_COLORS[class] then
+		return class
+	end
+
+	if not classFileByLocalName then
+		local map = {}
+		for _, list in ipairs({ LOCALIZED_CLASS_NAMES_MALE, LOCALIZED_CLASS_NAMES_FEMALE }) do
+			if type(list) == 'table' then
+				for classFile, localName in pairs(list) do
+					map[localName] = classFile
+				end
+			end
+		end
+		if next(map) then
+			classFileByLocalName = map
+		end
+	end
+
+	local classFile = classFileByLocalName and classFileByLocalName[class]
+	if classFile then
+		return classFile
+	end
+
+	return (class:upper():gsub('%s', ''))
+end
+
+---Class color for a class file name or a class name in the player's language
+---@param class string?
+---@return table|nil color
+function Tooltip:GetClassColor(class)
+	if type(class) ~= 'string' or class == '' then
+		return nil
+	end
+	local classFile = GetClassFile(class)
+	return classFile and RAID_CLASS_COLORS[classFile] or nil
+end
 
 ---Format a player name with class color
 ---@param name string Player name
----@param class string? Class name for coloring
+---@param class string? Class file name or class name in the player's language
 ---@return string Colored name
 function Tooltip:ColorName(name, class)
 	if not name then
 		return 'Unknown'
 	end
 
-	if class then
-		local color = RAID_CLASS_COLORS[class:upper()]
-		if color then
-			return string.format('|cff%02x%02x%02x%s|r', color.r * 255, color.g * 255, color.b * 255, name)
-		end
+	local color = self:GetClassColor(class)
+	if color then
+		return string.format('|cff%02x%02x%02x%s|r', color.r * 255, color.g * 255, color.b * 255, name)
 	end
 
 	return name
