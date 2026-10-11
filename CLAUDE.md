@@ -43,6 +43,9 @@ Uses LibQTip-2.0 for multi-column, scrollable tooltips with per-row click handle
 - **Toggleable features**: Levels, notes, officer notes, zones, rank, broadcasts, game client, WoW project, same-zone highlighting, status icons
 - **Event bucketing**: AceBucket-3.0 (1s bucket) for friend/guild event coalescing
 
+### Battle.net data
+- Online state is `accountInfo.gameAccountInfo.isOnline`. `BNetAccountInfo` has no `isOnline` field; reading it made every Battle.net friend look offline in the tooltip while the bar count (`BNGetNumFriends`) was right.
+
 ### Names
 - Friend, Battle.net character and guild tables are keyed by `LibsSocial:NameKey(name, realm)`: `Name-Realm` (realm without spaces, own realm added when missing) or, where characters have a surname (WoW Forever, `RegionalUniqueNamesEnabled()`), `First Last` with `-` read as a space. Never compare names with `Ambiguate` or by splitting on `-`.
 - WoW Forever: `LibsSocial.IsForever` (project 18 or interface 16000-19999), `LibsSocial.ProjectID` is the player's real project id for comparing with Battle.net `wowProjectID`.
@@ -65,7 +68,9 @@ When a request arrives: check if blocking enabled for that type → check if sen
 
 ## Display Formats
 
-Cycleable via right-click: `combined` | `friends` | `guild` | `realid` | `detailed`
+`detailed` is shown to players as "Online and total (B/F/G)".
+
+Cycleable via right-click: `colored` (default) | `combined` | `friends` | `guild` | `realid` | `detailed`. The list and names live in `DataBroker.DISPLAY_FORMAT_ORDER` / `DISPLAY_FORMAT_NAMES`; both option panels read them. `colored` ("Online (B | F | G)") shows online counts only, one color per group (Battle.net blue `00A2E8`, friends white, guild green, the same colors as the tooltip section headers), separated by a grey bar; groups with nobody in them are left out.
 
 ## Click Behaviors
 

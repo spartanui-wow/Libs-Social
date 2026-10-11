@@ -26,16 +26,17 @@ function Options:OnEnable()
 					},
 					format = {
 						name = 'Display Format',
-						desc = 'How to display friend counts',
+						desc = function()
+							return LibsSocial.DataBroker.FORMAT_DESC
+						end,
 						type = 'select',
 						order = 2,
-						values = {
-							combined = 'Combined (Total)',
-							friends = 'Friends Only',
-							guild = 'Guild Only',
-							realid = 'Battle.net Only',
-							detailed = 'Detailed (F/B/G)',
-						},
+						values = function()
+							return LibsSocial.DataBroker.DISPLAY_FORMAT_NAMES
+						end,
+						sorting = function()
+							return LibsSocial.DataBroker.DISPLAY_FORMAT_ORDER
+						end,
 						get = function()
 							return LibsSocial.db.profile.display.format
 						end,
@@ -71,7 +72,7 @@ function Options:OnEnable()
 					},
 					colorCodedCounts = {
 						name = 'Color-Coded Counts',
-						desc = 'Color each category differently in Detailed format (B=blue, F=white, G=green)',
+						desc = 'Color each count in the Online and total format: Battle.net blue, friends white, guild green.',
 						type = 'toggle',
 						order = 5,
 						get = function()

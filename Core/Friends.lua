@@ -130,7 +130,8 @@ function Friends:RefreshBattleNetFriends()
 				accountID = accountInfo.bnetAccountID,
 				accountName = accountInfo.accountName,
 				battleTag = accountInfo.battleTag,
-				isOnline = accountInfo.isOnline,
+				-- Online state lives on the game account; the account itself has no isOnline
+				isOnline = accountInfo.gameAccountInfo and accountInfo.gameAccountInfo.isOnline or false,
 				isBnetAFK = accountInfo.isAFK,
 				isBnetDND = accountInfo.isDND,
 				gameAccountID = bestGameInfo and bestGameInfo.gameAccountID,
@@ -159,7 +160,7 @@ function Friends:RefreshBattleNetFriends()
 				end
 			end
 
-			if accountInfo.isOnline then
+			if friendData.isOnline then
 				if GameClients.IsAppClient(clientProgram) then
 					self.battleNetAppOnly[accountInfo.bnetAccountID] = friendData
 					self.numBattleNetAppOnly = self.numBattleNetAppOnly + 1

@@ -28,7 +28,7 @@ local defaults = {
 			communityAsFriends = false,
 		},
 		display = {
-			format = 'combined',
+			format = 'colored',
 			showLabel = true,
 			showMobileIndicators = true,
 			showStatusIcons = true,

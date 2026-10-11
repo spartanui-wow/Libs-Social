@@ -23,6 +23,24 @@ local COLORS = {
 	sameZone = '00FF00',
 }
 
+-- A muted bar between the colored counts ('||' draws one '|')
+local COUNT_SEPARATOR = ' |cff' .. COLORS.offline .. '||' .. '|r '
+
+-- Display formats, in the order right-click steps through them
+local DISPLAY_FORMAT_ORDER = { 'colored', 'combined', 'friends', 'guild', 'realid', 'detailed' }
+local DISPLAY_FORMAT_NAMES = {
+	colored = 'Online (B | F | G)',
+	combined = 'Combined (Total)',
+	friends = 'Friends Only',
+	guild = 'Guild Only',
+	realid = 'Battle.net Only',
+	detailed = 'Online and total (B/F/G)',
+}
+DataBroker.DISPLAY_FORMAT_ORDER = DISPLAY_FORMAT_ORDER
+DataBroker.DISPLAY_FORMAT_NAMES = DISPLAY_FORMAT_NAMES
+local FORMAT_DESC = 'What the bar shows. Online (B | F | G): how many |cff' .. COLORS.realid .. 'Battle.net friends|r, |cff' .. COLORS.friends .. 'friends|r and |cff' .. COLORS.guild .. 'guild members|r are online, each in its own color.'
+DataBroker.FORMAT_DESC = FORMAT_DESC
+
 -- Section header color tables
 local SECTION_COLORS = {
 	bnet = { r = 0, g = 0.64, b = 0.91 },
@@ -73,15 +91,10 @@ function DataBroker:OnEnable()
 					format = {
 						type = 'select',
 						name = 'Display Format',
-						desc = 'How to display friend counts',
+						desc = FORMAT_DESC,
 						order = 1,
-						values = {
-							combined = 'Combined (Total)',
-							friends = 'Friends Only',
-							guild = 'Guild Only',
-							realid = 'Battle.net Only',
-							detailed = 'Detailed (F/B/G)',
-						},
+						values = DISPLAY_FORMAT_NAMES,
+						sorting = DISPLAY_FORMAT_ORDER,
 						get = function()
 							return LibsSocial.db.profile.display.format
 						end,
@@ -106,7 +119,7 @@ function DataBroker:OnEnable()
 					colorCodedCounts = {
 						type = 'toggle',
 						name = 'Color-Coded Counts',
-						desc = 'Color each category differently in Detailed format',
+						desc = 'Color each count in the Online and total format: Battle.net blue, friends white, guild green.',
 						order = 3,
 						get = function()
 							return LibsSocial.db.profile.display.colorCodedCounts
@@ -169,7 +182,9 @@ function DataBroker:GetDisplayText()
 	local text = ''
 	local format = db.format
 
-	if format == 'friends' then
+	if format == 'colored' then
+		text = self:GetColoredCountsText()
+	elseif format == 'friends' then
 		text = string.format('Friends: %d/%d', Friends.numCharacterOnline, Friends.numCharacterFriends)
 	elseif format == 'guild' then
 		if IsInGuild() then
@@ -210,7 +225,7 @@ function DataBroker:GetDisplayText()
 	end
 
 	-- Apply color coding (skip if colorCodedCounts already applied colors)
-	if db.colorByStatus and not (format == 'detailed' and db.colorCodedCounts) then
+	if db.colorByStatus and format ~= 'colored' and not (format == 'detailed' and db.colorCodedCounts) then
 		local totalOnline = Friends:GetTotalOnline()
 		if totalOnline > 0 then
 			text = '|cFF' .. COLORS.online .. text .. '|r'
@@ -222,8 +237,29 @@ function DataBroker:GetDisplayText()
 	return text
 end
 
+---Online counts only, one color per group: Battle.net blue, character friends white, guild green.
+---Groups the player has nothing in are left out.
+---@return string
+function DataBroker:GetColoredCountsText()
+	local Friends = LibsSocial.Friends
+	local parts = {}
+	if Friends.numBattleNetFriends > 0 then
+		table.insert(parts, string.format('|cff%s%d|r', COLORS.realid, Friends.numBattleNetOnline))
+	end
+	if Friends.numCharacterFriends > 0 then
+		table.insert(parts, string.format('|cff%s%d|r', COLORS.friends, Friends.numCharacterOnline))
+	end
+	if IsInGuild() then
+		table.insert(parts, string.format('|cff%s%d|r', COLORS.guild, Friends.numGuildOnline))
+	end
+	if #parts == 0 then
+		return '|cff' .. COLORS.offline .. '0|r'
+	end
+	return table.concat(parts, COUNT_SEPARATOR)
+end
+
 function DataBroker:CycleDisplayFormat()
-	local formats = { 'combined', 'friends', 'guild', 'realid', 'detailed' }
+	local formats = DISPLAY_FORMAT_ORDER
 	local current = LibsSocial.db.profile.display.format
 	local currentIndex = 1
 
