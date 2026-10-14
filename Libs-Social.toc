@@ -1,4 +1,4 @@
-## Interface: 120100, 120007, 16001, 50504, 38002, 20506, 11509
+## Interface: 120105, 120007, 16001, 50504, 38002, 20506, 11509
 ## Title: Lib's Social
 ## Notes: Social management addon with friend tracking, blocking, and auto-accept features
 ## IconTexture: Interface/Addons/Libs-Social/Logo-Icon
