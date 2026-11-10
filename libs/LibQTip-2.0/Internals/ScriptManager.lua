@@ -50,11 +50,11 @@ local FrameScriptHandler = {
 
         ScriptManager:CallScriptHandler(frame, "OnLeave", ...)
     end,
-    OnMouseDown = function(frame, button, ...)
-        ScriptManager:CallScriptHandler(frame, "OnMouseDown", button, ...)
+    OnMouseDown = function(frame, ...)
+        ScriptManager:CallScriptHandler(frame, "OnMouseDown", ...)
     end,
-    OnMouseUp = function(frame, button, ...)
-        ScriptManager:CallScriptHandler(frame, "OnMouseUp", button, ...)
+    OnMouseUp = function(frame, ...)
+        ScriptManager:CallScriptHandler(frame, "OnMouseUp", ...)
     end,
     OnReceiveDrag = function(frame, ...)
         ScriptManager:CallScriptHandler(frame, "OnReceiveDrag", ...)
@@ -67,16 +67,12 @@ local FrameScriptHandler = {
 
 ---@param frame LibQTip-2.0.ScriptFrame
 ---@param scriptType LibQTip-2.0.ScriptType
+---@param ... unknown
 function ScriptManager:CallScriptHandler(frame, scriptType, ...)
     local scriptMetadata = ScriptManager.FrameScriptMetadata[frame][scriptType]
 
     if scriptMetadata then
-        local params = scriptMetadata.Parameters
-        if params and #params > 0 then
-            scriptMetadata.Handler(frame, unpack(params), ...)
-        else
-            scriptMetadata.Handler(frame, ...)
-        end
+        scriptMetadata.Handler(frame, unpack(scriptMetadata.Parameters), ...)
     end
 end
 
